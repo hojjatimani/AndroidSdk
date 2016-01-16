@@ -186,6 +186,7 @@ public class WebSocketWriter extends Handler {
           for (NameValuePair pair : message.mHeaderList) {
         	  mBuffer.write( pair.getName() + ":" + pair.getValue() );
         	  mBuffer.crlf();
+             FileLog.d(TAG, "neveshtam header rooooo!!!!");
           }
       }           
       mBuffer.crlf();

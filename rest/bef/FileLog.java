@@ -59,7 +59,7 @@ public final class FileLog {
         if (!DEBUG) {
             return;
         }
-        dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+        dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault());
         try {
             Log.d("FileLog", "path : " + LogsDir);
             File dir = new File(LogsDir);

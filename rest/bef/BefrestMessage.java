@@ -13,9 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
-
 package rest.bef;
-
 
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -25,9 +23,6 @@ import org.json.JSONObject;
 
 import java.io.Serializable;
 
-/**
- * Created by hojjatimani on 11/25/15.
- */
 public final class BefrestMessage implements Parcelable {
     private static final String TAG = "BefrestMessage";
 
@@ -43,7 +38,6 @@ public final class BefrestMessage implements Parcelable {
         JSONObject jsObject = null;
         try {
             jsObject = new JSONObject(rawMsg);
-            if (jsObject.has("t")) //TODO remove
                 switch (jsObject.getString("t")) {
                     case "0":
                         type = MsgType.PONG;
@@ -57,7 +51,6 @@ public final class BefrestMessage implements Parcelable {
                     default:
                         FileLog.d(TAG, "Unknown Msg Type!!!");
                 }
-            else type = MsgType.PONG; //TODO remove
             data = Befrest.Util.decodeBase64(jsObject.getString("m"));
             timeStamp = jsObject.getString("ts");
         } catch (JSONException e) {
@@ -91,12 +84,12 @@ public final class BefrestMessage implements Parcelable {
         dest.writeString(timeStamp);
     }
 
-    BefrestMessage(Parcel source) {
+    public BefrestMessage(Parcel source) {
         data = source.readString();
         timeStamp = source.readString();
     }
 
-    /* package */ static final Parcelable.Creator CREATOR =
+    public static final Parcelable.Creator CREATOR =
             new Parcelable.Creator() {
 
                 @Override

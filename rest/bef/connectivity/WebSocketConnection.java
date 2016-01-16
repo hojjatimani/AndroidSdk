@@ -20,8 +20,6 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
-
-
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.net.InetSocketAddress;
@@ -60,6 +58,15 @@ public class WebSocketConnection implements WebSocket {
     private boolean mPrevConnected;
     private boolean disconnected;
 
+    private Runnable disconnectIfHandshakeTimeOut = new Runnable() {
+        @Override
+        public void run() {
+            FileLog.d(TAG, "Handshake time out! ");
+            failConnection(WebSocketConnectionHandler.CLOSE_HANDSHAKE_TIME_OUT, "Server Handshake Time Out.");
+        }
+    };
+    Handler handler = new Handler();
+
     /**
      * Asynchronous socket connector.
      */
@@ -88,7 +95,7 @@ public class WebSocketConnection implements WebSocket {
                         mOptions.getTcpNoDelay());
 
             } catch (IOException e) {
-                onClose(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT,
+                mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT,
                         e.getMessage());
                 return;
             }
@@ -112,15 +119,17 @@ public class WebSocketConnection implements WebSocket {
                     hs.mHeaderList = mWsHeaders;
                     mWriter.forward(hs);
 
+                    handler.postDelayed(disconnectIfHandshakeTimeOut, 7 * 1000);
+
                     mPrevConnected = true;
 
                 } catch (Exception e) {
-                    onClose(WebSocketConnectionHandler.CLOSE_INTERNAL_ERROR,
+                    mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_INTERNAL_ERROR,
                             e.getMessage());
                     return;
                 }
             } else {
-                onClose(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT,
+                mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT,
                         "Could not connect to WebSocket server");
                 return;
             }
@@ -197,7 +206,7 @@ public class WebSocketConnection implements WebSocket {
             FileLog.d(TAG, "mTransportChannel already NULL");
         }
 
-        onClose(code, reason);
+        mWsHandler.onClose(code, reason);
 
         FileLog.d(TAG, "worker threads stopped");
     }
@@ -205,6 +214,10 @@ public class WebSocketConnection implements WebSocket {
 
     public void connect(String wsUri, WebSocket.ConnectionHandler wsHandler) throws WebSocketException {
         connect(wsUri, null, wsHandler, new WebSocketOptions(), null);
+    }
+
+    public void connect(String wsUri, WebSocket.ConnectionHandler wsHandler, List<NameValuePair> headers) throws WebSocketException {
+        connect(wsUri, null, wsHandler, new WebSocketOptions(), headers);
     }
 
 
@@ -367,37 +380,6 @@ public class WebSocketConnection implements WebSocket {
         return need;
     }
 
-    /**
-     * Common close handler
-     *
-     * @param code   Close code.
-     * @param reason Close reason (human-readable).
-     */
-    private void onClose(int code, String reason) {
-        boolean reconnecting = false;
-
-        if ((code == ConnectionHandler.CLOSE_CANNOT_CONNECT) ||
-                (code == ConnectionHandler.CLOSE_CONNECTION_LOST)) {
-//            reconnecting = scheduleReconnect();
-        }
-
-
-        if (mWsHandler != null) {
-            try {
-                if (reconnecting) {
-                    mWsHandler.onClose(ConnectionHandler.CLOSE_RECONNECT, reason);
-                } else {
-                    mWsHandler.onClose(code, reason);
-                }
-            } catch (Exception e) {
-                FileLog.e(TAG, e);
-            }
-            //mWsHandler = null;
-        } else {
-            FileLog.d(TAG, "mWsHandler already NULL");
-        }
-    }
-
 
     protected void processAppMessage(Object message) {
     }
@@ -489,15 +471,15 @@ public class WebSocketConnection implements WebSocket {
 
                 FileLog.d(TAG, "WebSockets Close received (" + close.mCode + " - " + close.mReason + ")");
 
-                final int tavendoCloseCode = (close.mCode == 1000) ? ConnectionHandler.CLOSE_NORMAL : ConnectionHandler.CLOSE_CONNECTION_LOST;
+                final int closeCode = (close.mCode == 1000) ? ConnectionHandler.CLOSE_NORMAL : ConnectionHandler.CLOSE_CONNECTION_LOST;
                 wsConnection.disconnect();
-                wsConnection.onClose(tavendoCloseCode, close.mReason);
+                wsConnection.mWsHandler.onClose(closeCode, close.mReason);
 
             } else if (msg.obj instanceof WebSocketMessage.ServerHandshake) {
 
                 WebSocketMessage.ServerHandshake serverHandshake = (WebSocketMessage.ServerHandshake) msg.obj;
-
                 FileLog.d(TAG, "opening handshake received");
+                wsConnection.handler.removeCallbacks(wsConnection.disconnectIfHandshakeTimeOut);
 
                 if (serverHandshake.mSuccess) {
                     if (wsConnection.mWsHandler != null) {

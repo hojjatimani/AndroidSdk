@@ -1,12 +1,12 @@
 /******************************************************************************
  * Copyright 2015-2016 Befrest
- * <p>
+ * <p/>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p>
+ * <p/>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,11 +24,12 @@ import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Parcelable;
-import java.net.HttpURLConnection;
-import java.net.URL;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+
+import rest.bef.connectivity.NameValuePair;
 import rest.bef.connectivity.WebSocketConnection;
 import rest.bef.connectivity.WebSocketConnectionHandler;
 import rest.bef.connectivity.WebSocketException;
@@ -46,6 +47,8 @@ public final class PushService extends Service {
     /* package */ static final String WAKEUP = "WAKEUP";
     private static final String NOT_ASSIGNED = "NOT_ASSIGNED";
 
+    public static final String PING_PREFIX = String.valueOf((int) (Math.random() * 9999));
+
     //service wakeup variables and constants
     private static final int PUSH_SYNC_TIMEOUT = 45 * 1000;
     private static final int CONNECT_TIMEOUT = 45 * 1000;
@@ -56,17 +59,21 @@ public final class PushService extends Service {
     private int prevSuccessfulPings;
 
     //number of previous failed retry attempts
-    private int prevFaildConnectTries;
+    private int prevFailedConnectTries;
 
     //last time a ping was set to be sent delayed
     private long lastPingSetTime;
     private long lastAcceptedRefreshRequestTime;
 
     //constants
-    private static final int[] pingInterval = {10 * 1000, 30 * 1000, 50 * 1000, 70 * 1000, 100 * 1000};
+    private static final int[] pingInterval = {10 * 1000, 30 * 1000, 50 * 1000, 70 * 1000, 100 * 1000, 200 * 1000, 500 * 1000};
     private static final int[] retryInterval = {0, 5 * 1000, 10 * 1000, 25 * 1000, 50 * 1000};
     private static final int PING_TIMEOUT = 10 * 1000;
-    private static final int BATCH_MODE_TIMEOUT = 5 * 1000;
+
+    public static final int TIME_PER_MESSAGE_IN_BATH_MODE = 10;
+    private static final int BATCH_MODE_TIMEOUT = 1 * 1000;
+    private static int BATCH_SIZE;
+
     private int PING_ID = 0;
     private boolean retryInProgress;
     private boolean restartInProgress;
@@ -83,9 +90,10 @@ public final class PushService extends Service {
         public void onOpen() {
             FileLog.d(TAG, "Befrest Connected");
             connecting = false;
-            prevFaildConnectTries = prevSuccessfulPings = 0;
+            prevFailedConnectTries = prevSuccessfulPings = 0;
             notifyConnectionRefreshedIfNeeded();
             setNextPingToSendInFuture();
+            Befrest.Util.disableConnectivityChangeListener(PushService.this);
         }
 
         @Override
@@ -94,10 +102,6 @@ public final class PushService extends Service {
             FileLog.d(TAG, "Got Notif:: " + msg.type + "  " + msg);
             switch (msg.type) {
                 case DATA:
-                    if (msg.data.startsWith("PONG")) {
-                        onPong(msg.data);
-                        return;
-                    }
                     messages.add(msg);
                     if (!isBachReceiveMode) {
                         sendBefrestBroadcast(Befrest.ACTION_PUSH_RECIEVED);
@@ -106,7 +110,10 @@ public final class PushService extends Service {
                     break;
                 case BATCH:
                     isBachReceiveMode = true;
-                    handler.postDelayed(finishBatchMode, BATCH_MODE_TIMEOUT);
+                    BATCH_SIZE = Integer.valueOf(msg.data);
+                    int batchTime = getBatchTime();
+                    FileLog.d(TAG, "BATCH Mode for : " + batchTime + "milliseconds");
+                    handler.postDelayed(finishBatchMode, batchTime);
                     break;
                 case PONG:
                     onPong(msg.data);
@@ -120,10 +127,9 @@ public final class PushService extends Service {
             switch (code) {
                 case CLOSE_UNAUTHORIZED:
                     sendBefrestBroadcast(Befrest.ACTION_UNAUTHORIZED);
+                    Befrest.clearCredentials(PushService.this);
+                    Befrest.Util.disableConnectivityChangeListener(PushService.this);
                     stopSelf();
-                    break;
-                case CLOSE_RECONNECT:
-                    //reconnection handled in autobahn
                     break;
                 case CLOSE_CANNOT_CONNECT:
                 case CLOSE_CONNECTION_LOST:
@@ -131,6 +137,8 @@ public final class PushService extends Service {
                 case CLOSE_NORMAL:
                 case CLOSE_PROTOCOL_ERROR:
                 case CLOSE_SERVER_ERROR:
+                case CLOSE_HANDSHAKE_TIME_OUT:
+                    Befrest.Util.enableConnectivityChangeListener(PushService.this);
                     scheduleReconnect();
             }
         }
@@ -173,7 +181,17 @@ public final class PushService extends Service {
     private Runnable finishBatchMode = new Runnable() {
         @Override
         public void run() {
-            isBachReceiveMode = false;
+            int receivedMsgs = messages.size();
+            if ((receivedMsgs >= BATCH_SIZE - 1)) {
+                isBachReceiveMode = false;
+            } else {
+                BATCH_SIZE -= messages.size();
+                handler.postDelayed(finishBatchMode, getBatchTime());
+            }
+            if (receivedMsgs > 0) {
+                sendBefrestBroadcast(Befrest.ACTION_PUSH_RECIEVED);
+                revisePinging();
+            }
         }
     };
 
@@ -207,7 +225,7 @@ public final class PushService extends Service {
                 cancelALLPendingIntents();
                 break;
             case WAKEUP:
-                new WakeSeviceUp().start();
+                new WakeServiceUp().start();
         }
         return START_REDELIVER_INTENT;
     }
@@ -218,6 +236,15 @@ public final class PushService extends Service {
         terminateConnection();
         unRegisterScreenStateBroadCastReceiver();
         super.onDestroy();
+
+        //I might need to start the service here
+    }
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        super.onTaskRemoved(rootIntent);
+
+        //I might need to start the service here
     }
 
     private String getCommand(Intent intent) {
@@ -250,7 +277,7 @@ public final class PushService extends Service {
         if (retryInProgress || restartInProgress || !hasNetworkConnection)
             return; //a retry or restart is already in progress or close was due to internet connection lost
         cancelFuturePing();
-        prevFaildConnectTries++;
+        prevFailedConnectTries++;
         int interval = getNextReconnectInterval();
         FileLog.d(TAG, "scheduled    interval : " + interval);
         handler.postDelayed(retry, getNextReconnectInterval());
@@ -278,7 +305,9 @@ public final class PushService extends Service {
             try {
                 connecting = true;
                 FileLog.d(TAG, "connecting ...");
-                mConnection.connect(Befrest.Util.getSubscribeUri(this), wscHandler);
+                NameValuePair nameValuePair = Befrest.Util.getAuthHeader(this).get(0);
+                FileLog.d(TAG, "authHeader->" + nameValuePair.getName() + ":" + nameValuePair.getValue());
+                mConnection.connect(Befrest.Util.getSubscribeUri(this), wscHandler, Befrest.Util.getAuthHeader(this));
             } catch (WebSocketException e) {
                 FileLog.e(TAG, e);
             }
@@ -315,8 +344,7 @@ public final class PushService extends Service {
 
     private void sendPing() {
         PING_ID = (PING_ID + 1) % 5;
-        new SendPing("PONG" + PING_ID).start();
-//        Befrest.sendMessage("PONG" + PING_ID);
+        new SendPing(this, PING_PREFIX + PING_ID).start();
         restartInProgress = true;
         handler.postDelayed(restart, PING_TIMEOUT);
     }
@@ -332,7 +360,7 @@ public final class PushService extends Service {
     }
 
     private boolean isValidPong(String pongData) {
-        return Integer.parseInt(pongData.charAt(pongData.length() - 1) + "") == PING_ID;
+        return (PING_PREFIX + PING_ID).equals(pongData);
     }
 
     private void cancelALLPendingIntents() {
@@ -359,7 +387,12 @@ public final class PushService extends Service {
     }
 
     private int getNextReconnectInterval() {
-        return retryInterval[prevFaildConnectTries < retryInterval.length ? prevFaildConnectTries : retryInterval.length - 1];
+        return retryInterval[prevFailedConnectTries < retryInterval.length ? prevFailedConnectTries : retryInterval.length - 1];
+    }
+
+    private int getBatchTime() {
+        int requiredTime = TIME_PER_MESSAGE_IN_BATH_MODE * BATCH_SIZE;
+        return (requiredTime < BATCH_MODE_TIMEOUT ? requiredTime : BATCH_MODE_TIMEOUT);
     }
 
     private int getPingInterval() {
@@ -375,22 +408,22 @@ public final class PushService extends Service {
     }
 
     private void refresh(boolean isUserRequest) {
-        if (!Befrest.Util.isConnectedToInternet(this) || (System.currentTimeMillis() - lastAcceptedRefreshRequestTime < PING_TIMEOUT))
+        if (!Befrest.Util.isConnectedToInternet(this) || (isUserRequest && (System.currentTimeMillis() - lastAcceptedRefreshRequestTime < PING_TIMEOUT)))
             return;
-        lastAcceptedRefreshRequestTime = System.currentTimeMillis();
+        if (isUserRequest) lastAcceptedRefreshRequestTime = System.currentTimeMillis();
         refreshIsRequested = isUserRequest;
         if (connecting) {
             FileLog.d(TAG, "is connecting right now!");
-            //TODO we must have a time out for connecting
-        } else if (shouldConnect()) {
-            cancelALLPendingIntents();
-            connectIfNeeded();
         } else if (retryInProgress) {
             cancelFutureRetry();
+            prevFailedConnectTries = 0;
             handler.post(retry);
         } else if (restartInProgress) {
             cancelUpcommingRestart();
             handler.post(restart);
+        } else if (shouldConnect()) {
+            cancelALLPendingIntents();
+            connectIfNeeded();
         } else {
             prevSuccessfulPings = 0;
             setNextPingToSendInFuture(0);
@@ -408,71 +441,45 @@ public final class PushService extends Service {
         handler.postDelayed(sendPing, interval);
     }
 
-    private class SendPing extends Thread {
-        public final String TAG = SendPing.class.getSimpleName();
-        private String pingData;
+    private class WakeServiceUp extends Thread {
+        private static final String TAG = "WakeServiceUp";
 
-        SendPing(String data) {
-            pingData = data;
+        public WakeServiceUp() {
+            super(TAG);
         }
 
         @Override
         public void run() {
-            FileLog.d(TAG, "sendingPing...");
-            if (Befrest.Util.isConnectedToInternet(PushService.this))
-                try {
-                    Thread.sleep(500); //sleep a bit to ensure handlers for waiting for pong are ready
-                    URL url = new URL(Befrest.Util.getPingUrl(PushService.this));
-                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                    conn.setRequestMethod("POST");
-                    conn.setRequestProperty("connection", "close");
-                    conn.setDoInput(true);
-                    conn.setDoOutput(true);
-                    conn.setConnectTimeout(5 * 1000);
-                    conn.connect();
-                    //wait to connect
-                    conn.getOutputStream().write(pingData.getBytes());
-                    conn.getOutputStream().flush();
-                    conn.getOutputStream().close();
-                    FileLog.d(TAG, "pingSendStatus: " + conn.getResponseCode() + " " + conn.getResponseMessage());
-                    conn.disconnect();
-                } catch (Exception ex) {
-                    FileLog.e(TAG, ex);
-                }
+            if (Befrest.Util.isUserInteractive(PushService.this)) {
+                FileLog.d(TAG, "user is interactive. most likely " + "device is not asleep");
+                refresh(false);
+            } else if (Befrest.Util.isConnectedToInternet(PushService.this)) {
+                FileLog.d(TAG, "already connected to internet");
+                refresh(false);
+                giveSomeTimeToService();
+            } else if (Befrest.Util.isWifiEnabled(PushService.this)) {
+                Befrest.Util.acquireWifiLock(PushService.this);
+                startMonitoringWifiState();
+                Befrest.Util.askWifiToConnect(PushService.this);
+                waitForConnection();
+                stopMonitoringWifiState();
+                refresh(false);
+                giveSomeTimeToService();
+                Befrest.Util.releaseWifiLock();
+            } else {
+                FileLog.d(TAG, "no kind of network is enabled");
+            }
+            Befrest.Util.releaseWakeLock();
         }
-    }
 
-    private class WakeSeviceUp extends Thread {
-        @Override
-        public void run() {
+        private void giveSomeTimeToService() {
             try {
-                if (Befrest.Util.isUserInteractive(PushService.this)) {
-                    FileLog.d(TAG, "user is interactive. most likely " + "device is not asleep");
-                    refresh(false);
-                } else if (Befrest.Util.isConnectedToInternet(PushService.this)) {
-                    FileLog.d(TAG, "already connected to internet");
-                    refresh(false);
-                } else if (Befrest.Util.isWifiEnabled(PushService.this)) {
-                    Befrest.Util.acquireWifiLock(PushService.this);
-                    startMonitoringWifiState();
-                    Befrest.Util.askWifiToConnect(PushService.this);
-                    waitForConnection();
-                    stopMonitoringWifiState();
-                    boolean connectedToInternet = Befrest.Util.isConnectedToInternet(PushService.this);
-                    FileLog.m(TAG, "isConnectedToInternet", connectedToInternet);
-                    if (Befrest.Util.isWifiConnectedOrConnecting(PushService.this) || connectedToInternet) {
-                        refresh(false);
-                        //give PushService a time to work
-                        Thread.sleep(PUSH_SYNC_TIMEOUT);
-                    }
-                    Befrest.Util.releaseWifiLock();
-                } else {
-                    FileLog.d(TAG, "wifi is not enabled");
-                }
+                boolean connectedToInternet = Befrest.Util.isConnectedToInternet(PushService.this);
+                FileLog.m(TAG, "isConnectedToInternet", connectedToInternet);
+                if (connectedToInternet || Befrest.Util.isWifiConnectedOrConnecting(PushService.this))
+                    Thread.sleep(PUSH_SYNC_TIMEOUT);
             } catch (InterruptedException e) {
                 FileLog.e(TAG, e);
-            } finally {
-                Befrest.Util.releaseWakeLock();
             }
         }
     }

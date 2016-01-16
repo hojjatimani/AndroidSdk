@@ -13,23 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
+package rest.bef;
 
-package rest.bef.connectivity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
 
-public class NameValuePair {
-    private String name;
-    private String value;
+public class WakeupAlarmReceiver extends BroadcastReceiver {
+    private static final String TAG = "WakeupAlarmReceiver";
 
-    public NameValuePair(String name , String value){
-        this.name = name;
-        this.value =value;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getValue() {
-        return value;
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        String action = intent.getAction();
+        FileLog.d(TAG, "Broadcast received: action=" + action);
+        if (action.equals(Befrest.ACTION_WAKEUP)) {
+            Befrest.Util.acquireWakeLock(context);
+            context.startService(new Intent(context, PushService.class).putExtra(PushService.WAKEUP, true));
+        }
     }
 }
