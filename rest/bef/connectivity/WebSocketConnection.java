@@ -20,6 +20,8 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
+import android.util.Log;
+
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.net.InetSocketAddress;
@@ -38,6 +40,7 @@ public class WebSocketConnection implements WebSocket {
     protected WebSocketReader mReader;
     protected WebSocketWriter mWriter;
     protected HandlerThread mWriterThread;
+    protected WebSocketConnector connector;
 
     protected SocketChannel mTransportChannel;
 
@@ -122,6 +125,7 @@ public class WebSocketConnection implements WebSocket {
                     handler.postDelayed(disconnectIfHandshakeTimeOut, 7 * 1000);
 
                     mPrevConnected = true;
+                    disconnected = false;
 
                 } catch (Exception e) {
                     mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_INTERNAL_ERROR,
@@ -133,6 +137,7 @@ public class WebSocketConnection implements WebSocket {
                         "Could not connect to WebSocket server");
                 return;
             }
+            connector = null;
         }
 
     }
@@ -293,7 +298,8 @@ public class WebSocketConnection implements WebSocket {
         mActive = true;
 
         // use asynch connector on short-lived background thread
-        new WebSocketConnector().start();
+        connector = new WebSocketConnector();
+        connector.start();
     }
 
 
@@ -301,6 +307,17 @@ public class WebSocketConnection implements WebSocket {
         mActive = false;
         mPrevConnected = false;
         disconnected = true;
+        //it must be here
+        if (connector != null) {
+            try {
+                connector.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            FileLog.d(TAG, "connector joind");
+            connector = null;
+        }
+        handler.removeCallbacks(disconnectIfHandshakeTimeOut); // it must be here!
         if (mReader != null) {
             mReader.quit();
             try {
@@ -483,10 +500,13 @@ public class WebSocketConnection implements WebSocket {
 
                 if (serverHandshake.mSuccess) {
                     if (wsConnection.mWsHandler != null) {
-                        wsConnection.mWsHandler.onOpen();
+                        if (!wsConnection.disconnected)
+                            wsConnection.mWsHandler.onOpen();
                     } else {
                         FileLog.d(TAG, "could not call onOpen() .. handler already NULL");
                     }
+                } else {
+                    FileLog.d(TAG, "could not call onOpen() .. serverHandshake was not successful");
                 }
 
             } else if (msg.obj instanceof WebSocketMessage.ConnectionLost) {

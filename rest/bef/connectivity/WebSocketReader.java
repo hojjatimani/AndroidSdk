@@ -472,7 +472,7 @@ public class WebSocketReader extends Thread {
      *                   from raw UTF-8 payload or null (empty payload).
      */
     protected void onTextMessage(String payload) {
-
+        FileLog.d(TAG, "onTextMessage()");
         notify(new WebSocketMessage.TextMessage(payload));
     }
 

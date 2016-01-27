@@ -43,7 +43,7 @@ public class SendPing extends Thread {
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("connection", "close");
-                NameValuePair authHeader = Befrest.Util.getAuthHeader(context).get(0);
+                NameValuePair authHeader = Befrest.Util.getAuthHeader(context);
                 conn.addRequestProperty(authHeader.getName(), authHeader.getValue());
                 conn.setDoInput(true);
                 conn.setDoOutput(true);

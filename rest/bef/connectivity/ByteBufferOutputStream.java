@@ -26,7 +26,7 @@ import java.nio.ByteBuffer;
  * direct ByteBuffer for use i.e. with NIO for socket I/O. The ByteBuffer
  * is automatically enlarged if needed (preserving contents when enlarged).
  */
- class ByteBufferOutputStream extends OutputStream {
+ public class ByteBufferOutputStream extends OutputStream {
 
    /// Initial size of allocated ByteBuffer.
    private final int mInitialSize;

@@ -20,33 +20,29 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Parcelable;
 
-import java.util.ArrayList;
-
 
 /**
  * Override this class to make register receivers. You can register receivers
  * either dynamically in code or statically in projects AndroidManifest file.
- *
  */
-public abstract class BefrestPushBroadcastReceiver extends BroadcastReceiver {
-    private static final String TAG = "BefrestPushBroadcastReceiver";
+public abstract class BefrestPushReceiver extends BroadcastReceiver {
+    private static final String TAG = "BefrestPushReceiver";
 
     @Override
     public final void onReceive(Context context, Intent intent) {
-        String intentAction = intent.getAction();
-        FileLog.d(TAG, "BroadCastReceived : " + intentAction);
-        switch (intentAction) {
-            case Befrest.ACTION_PUSH_RECIEVED:
-//                onPushReceived(context, intent.<BefrestMessage>getParcelableArrayListExtra(Befrest.Util.KEY_MESSAGE_PASSED));
+        int type = intent.getIntExtra(Befrest.BROADCAST_TYPE, -1);
+        FileLog.d(TAG, "BroadCastReceived : type=" + type);
+        switch (type) {
+            case Befrest.BroadcastType.PUSH:
                 Parcelable[] p = intent.getParcelableArrayExtra(Befrest.Util.KEY_MESSAGE_PASSED);
                 BefrestMessage[] bm = new BefrestMessage[p.length];
                 System.arraycopy(p, 0, bm, 0, p.length);
                 onPushReceived(context, bm);
                 break;
-            case Befrest.ACTION_UNAUTHORIZED:
+            case Befrest.BroadcastType.UNAUTHORIZED:
                 onAuthorizeProblem(context);
                 break;
-            case Befrest.ACTION_CONNECTION_REFRESHED:
+            case Befrest.BroadcastType.CONNECTION_REFRESHED:
                 onConnectionRefreshed(context);
                 break;
             default:
@@ -54,13 +50,10 @@ public abstract class BefrestPushBroadcastReceiver extends BroadcastReceiver {
         }
     }
 
-//    abstract public void onPushReceived(Context context, ArrayList<BefrestMessage> messages);
-
     /**
      * Called when new push messages are received.
      *
-     * @param context Context
-     *
+     * @param context  Context
      * @param messages messages
      */
     abstract public void onPushReceived(Context context, BefrestMessage[] messages);
@@ -83,7 +76,7 @@ public abstract class BefrestPushBroadcastReceiver extends BroadcastReceiver {
      *
      * @param context Context
      */
-    public void onConnectionRefreshed(Context context){
+    public void onConnectionRefreshed(Context context) {
         FileLog.d(TAG, "Connection Refreshed");
     }
 }

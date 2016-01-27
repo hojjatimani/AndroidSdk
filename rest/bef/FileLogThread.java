@@ -21,7 +21,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 
-final class FileLogThread extends Thread {
+public final class FileLogThread extends Thread {
     public volatile Handler handler = null;
     private final Object handlerSyncObject = new Object();
 
