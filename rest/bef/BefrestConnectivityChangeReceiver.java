@@ -29,7 +29,7 @@ public final class BefrestConnectivityChangeReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
-        FileLog.d(TAG, "Broadcast received: action=" + action);
+        BefLog.v(TAG, "Broadcast received: action=" + action);
         if (action.equals(ConnectivityManager.CONNECTIVITY_ACTION))
             if (Befrest.Util.isConnectedToInternet(context))
                 context.startService(new Intent(context, PushService.class).putExtra(PushService.NETWORK_CONNECTED, true));

@@ -25,7 +25,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.HashMap;
 import java.util.Map;
-import rest.bef.FileLog;
+
+import rest.bef.BefLog;
 
 
 /**
@@ -98,7 +99,7 @@ public class WebSocketReader extends Thread {
         mFrameHeader = null;
         mState = STATE_CONNECTING;
 
-        FileLog.d(TAG, "created");
+        BefLog.v(TAG, "created");
     }
 
 
@@ -107,7 +108,7 @@ public class WebSocketReader extends Thread {
      */
     public void quit() {
         mState = STATE_CLOSED;
-        FileLog.d(TAG, "quit");
+        BefLog.v(TAG, "quit");
     }
 
 
@@ -472,7 +473,7 @@ public class WebSocketReader extends Thread {
      *                   from raw UTF-8 payload or null (empty payload).
      */
     protected void onTextMessage(String payload) {
-        FileLog.d(TAG, "onTextMessage()");
+        BefLog.v(TAG, "onTextMessage()");
         notify(new WebSocketMessage.TextMessage(payload));
     }
 
@@ -568,7 +569,7 @@ public class WebSocketReader extends Thread {
                 String[] h = line.split(": ");
                 if (h.length == 2) {
                     headers.put(h[0], h[1]);
-                    FileLog.w(TAG, String.format("'%s'='%s'", h[0], h[1]));
+                    BefLog.w(TAG, String.format("'%s'='%s'", h[0], h[1]));
                 }
             }
         }
@@ -605,7 +606,7 @@ public class WebSocketReader extends Thread {
         mFrameBuffer.position(end);
         mFrameBuffer.get(statusBuf, 0, statusMessageLength);
         String statusMessage = new String(statusBuf, "UTF-8");
-        FileLog.w(TAG, String.format("Status: %d (%s)", statusCode, statusMessage));
+        BefLog.w(TAG, String.format("Status: %d (%s)", statusCode, statusMessage));
         return new Pair<Integer, String>(statusCode, statusMessage);
     }
 
@@ -641,7 +642,7 @@ public class WebSocketReader extends Thread {
     @Override
     public void run() {
 
-        FileLog.d(TAG, "running");
+        BefLog.d(TAG, "running");
 
         try {
 
@@ -657,7 +658,7 @@ public class WebSocketReader extends Thread {
                     mStopped = true;
                 } else if (len < 0) {
 
-                    FileLog.d(TAG, "run() : ConnectionLost");
+                    BefLog.v(TAG, "run() : ConnectionLost");
 
                     notify(new WebSocketMessage.ConnectionLost());
                     mStopped = true;
@@ -666,14 +667,14 @@ public class WebSocketReader extends Thread {
 
         } catch (WebSocketException e) {
 
-            FileLog.d(TAG, "run() : WebSocketException (" + e.toString() + ")");
+            BefLog.v(TAG, "run() : WebSocketException (" + e.toString() + ")");
 
             // wrap the exception and notify master
             notify(new WebSocketMessage.ProtocolViolation(e));
 
         } catch (SocketException e) {
 
-           FileLog.d(TAG, "run() : SocketException (" + e.toString() + ")");
+           BefLog.v(TAG, "run() : SocketException (" + e.toString() + ")");
 
             // wrap the exception and notify master
             notify(new WebSocketMessage.ConnectionLost());
@@ -681,7 +682,7 @@ public class WebSocketReader extends Thread {
 
         } catch (Exception e) {
 
-            FileLog.d(TAG, "run() : Exception (" + e.toString() + ")");
+            BefLog.v(TAG, "run() : Exception (" + e.toString() + ")");
 
             // wrap the exception and notify master
             notify(new WebSocketMessage.Error(e));
@@ -690,6 +691,6 @@ public class WebSocketReader extends Thread {
 
             mStopped = true;
         }
-        FileLog.d(TAG, "ended");
+        BefLog.v(TAG, "ended");
     }
 }

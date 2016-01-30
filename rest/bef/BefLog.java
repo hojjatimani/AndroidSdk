@@ -1,12 +1,12 @@
 /******************************************************************************
  * Copyright 2015-2016 Befrest
- * <p/>
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p/>
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,15 +23,13 @@ import android.util.Log;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-public final class FileLog {
-    private static boolean DEBUG = true;
+public final class BefLog {
+    private static boolean LogToFile = false;
     private static final String LogsDir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/BefrestLogs";
     private OutputStreamWriter streamWriter = null;
     private SimpleDateFormat dateFormat;
@@ -40,28 +38,33 @@ public final class FileLog {
     private File networkFile = null;
 
 
-    private static volatile FileLog Instance = null;
+    private static int getLogLevel() {
+//        TODO
+        return Befrest.LOG_LEVEL_DEBUG;
+    }
 
-    private static FileLog getInstance() {
-        FileLog localInstance = Instance;
+    private static volatile BefLog Instance = null;
+
+    private static BefLog getInstance() {
+        BefLog localInstance = Instance;
         if (localInstance == null) {
-            synchronized (FileLog.class) {
+            synchronized (BefLog.class) {
                 localInstance = Instance;
                 if (localInstance == null) {
-                    Instance = localInstance = new FileLog();
+                    Instance = localInstance = new BefLog();
                 }
             }
         }
         return localInstance;
     }
 
-    private FileLog() {
-        if (!DEBUG) {
+    private BefLog() {
+        if (!LogToFile) {
             return;
         }
         dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault());
         try {
-            Log.d("FileLog", "path : " + LogsDir);
+            Log.v("BefLog File", "path : " + LogsDir);
             File dir = new File(LogsDir);
             dir.mkdirs();
             currentFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + ".txt");
@@ -82,14 +85,11 @@ public final class FileLog {
     }
 
     public static void e(final String tag, final String message, final Throwable exception) {
-        if (!DEBUG) {
-            return;
-        }
+        if (getLogLevel() > Befrest.LOG_LEVEL_ERROR) return;
         Log.e(tag, message, exception);
+        if (!LogToFile) return;
         final int Tid = Process.myTid();
         final long time = System.currentTimeMillis();
-//        l2(getInstance().dateFormat.format(time + " (Tid:" + Tid + ")" + " E/" + tag + "﹕ " + message + "\n");
-//        l2(exception.toString());
         if (getInstance().streamWriter != null) {
             getInstance().logQueue.postRunnable(new Runnable() {
                 @Override
@@ -107,13 +107,11 @@ public final class FileLog {
     }
 
     public static void e(final String tag, final String message) {
-        if (!DEBUG) {
-            return;
-        }
+        if (getLogLevel() > Befrest.LOG_LEVEL_ERROR) return;
         Log.e(tag, message);
+        if (!LogToFile) return;
         final int Tid = Process.myTid();
         final long time = System.currentTimeMillis();
-//        l2(getInstance().dateFormat.format(time) + " (Tid:" + Tid + ")" + " E/" + tag + "﹕ " + message + "\n");
         if (getInstance().streamWriter != null) {
             getInstance().logQueue.postRunnable(new Runnable() {
                 @Override
@@ -130,10 +128,9 @@ public final class FileLog {
     }
 
     public static void e(final String tag, final Throwable e) {
-        if (!DEBUG) {
-            return;
-        }
+        if (getLogLevel() > Befrest.LOG_LEVEL_ERROR) return;
         e.printStackTrace();
+        if (!LogToFile) return;
         final int Tid = Process.myTid();
         final long time = System.currentTimeMillis();
         if (getInstance().streamWriter != null) {
@@ -158,10 +155,9 @@ public final class FileLog {
     }
 
     public static void d(final String tag, final String message) {
-        if (!DEBUG) {
-            return;
-        }
+        if (getLogLevel() > Befrest.LOG_LEVEL_DEBUG) return;
         Log.d(tag, message);
+        if (!LogToFile) return;
         final int Tid = Process.myTid();
         final long time = System.currentTimeMillis();
         if (getInstance().streamWriter != null) {
@@ -179,11 +175,52 @@ public final class FileLog {
         }
     }
 
-    public static void w(final String tag, final String message) {
-        if (!DEBUG) {
-            return;
+    public static void i(final String tag, final String message) {
+        if (getLogLevel() > Befrest.LOG_LEVEL_INFO) return;
+        Log.i(tag, message);
+        if (!LogToFile) return;
+        final int Tid = Process.myTid();
+        final long time = System.currentTimeMillis();
+        if (getInstance().streamWriter != null) {
+            getInstance().logQueue.postRunnable(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        getInstance().streamWriter.write(getInstance().dateFormat.format(time) + " (Tid:" + Tid + ")" + " I/" + tag + "﹕ " + message + "\n");
+                        getInstance().streamWriter.flush();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
         }
+    }
+
+    public static void v(final String tag, final String message) {
+        if (getLogLevel() > Befrest.LOG_LEVEL_VERBOSE) return;
+        Log.v(tag, message);
+        if (!LogToFile) return;
+        final int Tid = Process.myTid();
+        final long time = System.currentTimeMillis();
+        if (getInstance().streamWriter != null) {
+            getInstance().logQueue.postRunnable(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        getInstance().streamWriter.write(getInstance().dateFormat.format(time) + " (Tid:" + Tid + ")" + " V/" + tag + "﹕ " + message + "\n");
+                        getInstance().streamWriter.flush();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        }
+    }
+
+    public static void w(final String tag, final String message) {
+        if (getLogLevel() > Befrest.LOG_LEVEL_WARN) return;
         Log.w(tag, message);
+        if (!LogToFile) return;
         final int Tid = Process.myTid();
         final long time = System.currentTimeMillis();
         if (getInstance().streamWriter != null) {
@@ -201,8 +238,8 @@ public final class FileLog {
         }
     }
 
-    public static void m(String TAG, String message, Object... objects) {
-        if (!DEBUG) return;
+    public static void v(String TAG, String message, Object... objects) {
+        if (getLogLevel() > Befrest.LOG_LEVEL_VERBOSE) return;
         String s = "";
         for (Object o : objects) {
             s += o + ", ";

@@ -1,12 +1,12 @@
 /******************************************************************************
  * Copyright 2015-2016 Befrest
- * <p/>
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p/>
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,7 +30,7 @@ import java.net.URISyntaxException;
 import java.nio.channels.SocketChannel;
 import java.util.List;
 
-import rest.bef.FileLog;
+import rest.bef.BefLog;
 
 
 public class WebSocketConnection implements WebSocket {
@@ -64,7 +64,7 @@ public class WebSocketConnection implements WebSocket {
     private Runnable disconnectIfHandshakeTimeOut = new Runnable() {
         @Override
         public void run() {
-            FileLog.d(TAG, "Handshake time out! ");
+            BefLog.v(TAG, "Handshake time out! ");
             failConnection(WebSocketConnectionHandler.CLOSE_HANDSHAKE_TIME_OUT, "Server Handshake Time Out.");
         }
     };
@@ -98,8 +98,11 @@ public class WebSocketConnection implements WebSocket {
                         mOptions.getTcpNoDelay());
 
             } catch (IOException e) {
-                mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT,
-                        e.getMessage());
+                if (mWsHandler != null)
+                    mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT,
+                            e.getMessage());
+                else
+                    Log.w(TAG, "Befrest Warning! mWsHandler is null where it is expected to be valid!");
                 return;
             }
 
@@ -128,8 +131,11 @@ public class WebSocketConnection implements WebSocket {
                     disconnected = false;
 
                 } catch (Exception e) {
-                    mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_INTERNAL_ERROR,
-                            e.getMessage());
+                    if (mWsHandler != null)
+                        mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_INTERNAL_ERROR,
+                                e.getMessage());
+                    else
+                        Log.w(TAG, "Befrest Warning! mWsHandler is null where it is expected to be valid!");
                     return;
                 }
             } else {
@@ -143,7 +149,7 @@ public class WebSocketConnection implements WebSocket {
     }
 
     public WebSocketConnection() {
-        FileLog.d(TAG, "created");
+        BefLog.v(TAG, "created");
 
         mMasterHandler = new MasterHandler(new WeakReference<WebSocketConnection>(this));
 
@@ -174,17 +180,17 @@ public class WebSocketConnection implements WebSocket {
 
 
     private void failConnection(int code, String reason) {
-        FileLog.d(TAG, "fail connection [code = " + code + ", reason = " + reason);
+        BefLog.v(TAG, "fail connection [code = " + code + ", reason = " + reason);
         if (mReader != null) {
             mReader.quit();
             try {
                 mReader.join();
             } catch (InterruptedException e) {
-                FileLog.e(TAG, e);
+                BefLog.e(TAG, e);
             }
             mReader = null;
         } else {
-            FileLog.d(TAG, "mReader already NULL");
+            BefLog.v(TAG, "mReader already NULL");
         }
 
         if (mWriter != null) {
@@ -192,28 +198,28 @@ public class WebSocketConnection implements WebSocket {
             try {
                 mWriterThread.join();
             } catch (InterruptedException e) {
-                FileLog.e(TAG, e);
+                BefLog.e(TAG, e);
             }
             mWriter = null;
             mWriterThread = null;
         } else {
-            FileLog.d(TAG, "mWriter already NULL");
+            BefLog.v(TAG, "mWriter already NULL");
         }
 
         if (mTransportChannel != null) {
             try {
                 mTransportChannel.close();
             } catch (IOException e) {
-                FileLog.e(TAG, e);
+                BefLog.e(TAG, e);
             }
             mTransportChannel = null;
         } else {
-            FileLog.d(TAG, "mTransportChannel already NULL");
+            BefLog.v(TAG, "mTransportChannel already NULL");
         }
 
         mWsHandler.onClose(code, reason);
 
-        FileLog.d(TAG, "worker threads stopped");
+        BefLog.v(TAG, "worker threads stopped");
     }
 
 
@@ -314,7 +320,7 @@ public class WebSocketConnection implements WebSocket {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-            FileLog.d(TAG, "connector joind");
+            BefLog.v(TAG, "connector joind");
             connector = null;
         }
         handler.removeCallbacks(disconnectIfHandshakeTimeOut); // it must be here!
@@ -323,11 +329,11 @@ public class WebSocketConnection implements WebSocket {
             try {
                 mReader.join();
             } catch (InterruptedException e) {
-                FileLog.e(TAG, e);
+                BefLog.e(TAG, e);
             }
             mReader = null;
         } else {
-            FileLog.d(TAG, "mReader already NULL");
+            BefLog.v(TAG, "mReader already NULL");
         }
 
         if (mWriter != null) {
@@ -336,25 +342,25 @@ public class WebSocketConnection implements WebSocket {
             try {
                 mWriterThread.join();
             } catch (InterruptedException e) {
-                FileLog.e(TAG, e);
+                BefLog.e(TAG, e);
             }
             mWriter = null;
             mWriterThread = null;
         } else {
-            FileLog.d(TAG, "mWriter already NULL");
+            BefLog.v(TAG, "mWriter already NULL");
         }
 
         if (mTransportChannel != null) {
             try {
                 mTransportChannel.close();
             } catch (IOException e) {
-                FileLog.e(TAG, e);
+                BefLog.e(TAG, e);
             }
             mTransportChannel = null;
         } else {
-            FileLog.d(TAG, "mTransportChannel already NULL");
+            BefLog.v(TAG, "mTransportChannel already NULL");
         }
-        FileLog.d(TAG, "disconnected");
+        BefLog.v(TAG, "disconnected");
     }
 
     /**
@@ -385,11 +391,11 @@ public class WebSocketConnection implements WebSocket {
         int interval = mOptions.getReconnectInterval();
         boolean need = mActive && mPrevConnected && (interval > 0);
         if (need) {
-            FileLog.d(TAG, "Reconnection scheduled");
+            BefLog.v(TAG, "Reconnection scheduled");
             mMasterHandler.postDelayed(new Runnable() {
 
                 public void run() {
-                    FileLog.d(TAG, "Reconnecting...");
+                    BefLog.d(TAG, "Reconnecting...");
                     reconnect();
                 }
             }, interval);
@@ -410,7 +416,7 @@ public class WebSocketConnection implements WebSocket {
         mWriterThread.start();
         mWriter = new WebSocketWriter(mWriterThread.getLooper(), mMasterHandler, mTransportChannel, mOptions);
 
-        FileLog.d(TAG, "WS writer created and started");
+        BefLog.v(TAG, "WS writer created and started");
     }
 
 
@@ -421,7 +427,7 @@ public class WebSocketConnection implements WebSocket {
 
         mReader = new WebSocketReader(mMasterHandler, mTransportChannel, mOptions, "WebSocketReader");
         mReader.start();
-        FileLog.d(TAG, "WS reader created and started");
+        BefLog.v(TAG, "WS reader created and started");
     }
 
     private static class MasterHandler extends Handler {
@@ -442,7 +448,7 @@ public class WebSocketConnection implements WebSocket {
                 if (wsConnection.mWsHandler != null) {
                     wsConnection.mWsHandler.onTextMessage(textMessage.mPayload);
                 } else {
-                    FileLog.d(TAG, "could not call onTextMessage() .. handler already NULL");
+                    BefLog.w(TAG, "could not call onTextMessage() .. handler already NULL");
                 }
 
             } else if (msg.obj instanceof WebSocketMessage.RawTextMessage) {
@@ -452,7 +458,7 @@ public class WebSocketConnection implements WebSocket {
                 if (wsConnection.mWsHandler != null) {
                     wsConnection.mWsHandler.onRawTextMessage(rawTextMessage.mPayload);
                 } else {
-                    FileLog.d(TAG, "could not call onRawTextMessage() .. handler already NULL");
+                    BefLog.w(TAG, "could not call onRawTextMessage() .. handler already NULL");
                 }
 
             } else if (msg.obj instanceof WebSocketMessage.BinaryMessage) {
@@ -462,13 +468,13 @@ public class WebSocketConnection implements WebSocket {
                 if (wsConnection.mWsHandler != null) {
                     wsConnection.mWsHandler.onBinaryMessage(binaryMessage.mPayload);
                 } else {
-                    FileLog.d(TAG, "could not call onBinaryMessage() .. handler already NULL");
+                    BefLog.w(TAG, "could not call onBinaryMessage() .. handler already NULL");
                 }
 
             } else if (msg.obj instanceof WebSocketMessage.Ping) {
 
                 WebSocketMessage.Ping ping = (WebSocketMessage.Ping) msg.obj;
-                FileLog.d(TAG, "WebSockets Ping received");
+                BefLog.v(TAG, "WebSockets Ping received");
 
                 // reply with Pong
                 WebSocketMessage.Pong pong = new WebSocketMessage.Pong();
@@ -480,13 +486,13 @@ public class WebSocketConnection implements WebSocket {
                 @SuppressWarnings("unused")
                 WebSocketMessage.Pong pong = (WebSocketMessage.Pong) msg.obj;
 
-                FileLog.d(TAG, "WebSockets Pong received");
+                BefLog.v(TAG, "WebSockets Pong received");
 
             } else if (msg.obj instanceof WebSocketMessage.Close) {
 
                 WebSocketMessage.Close close = (WebSocketMessage.Close) msg.obj;
 
-                FileLog.d(TAG, "WebSockets Close received (" + close.mCode + " - " + close.mReason + ")");
+                BefLog.v(TAG, "WebSockets Close received (" + close.mCode + " - " + close.mReason + ")");
 
                 final int closeCode = (close.mCode == 1000) ? ConnectionHandler.CLOSE_NORMAL : ConnectionHandler.CLOSE_CONNECTION_LOST;
                 wsConnection.disconnect();
@@ -495,7 +501,7 @@ public class WebSocketConnection implements WebSocket {
             } else if (msg.obj instanceof WebSocketMessage.ServerHandshake) {
 
                 WebSocketMessage.ServerHandshake serverHandshake = (WebSocketMessage.ServerHandshake) msg.obj;
-                FileLog.d(TAG, "opening handshake received");
+                BefLog.v(TAG, "opening handshake received");
                 wsConnection.handler.removeCallbacks(wsConnection.disconnectIfHandshakeTimeOut);
 
                 if (serverHandshake.mSuccess) {
@@ -503,10 +509,10 @@ public class WebSocketConnection implements WebSocket {
                         if (!wsConnection.disconnected)
                             wsConnection.mWsHandler.onOpen();
                     } else {
-                        FileLog.d(TAG, "could not call onOpen() .. handler already NULL");
+                        BefLog.w(TAG, "could not call onOpen() .. handler already NULL");
                     }
                 } else {
-                    FileLog.d(TAG, "could not call onOpen() .. serverHandshake was not successful");
+                    BefLog.w(TAG, "could not call onOpen() .. serverHandshake was not successful");
                 }
 
             } else if (msg.obj instanceof WebSocketMessage.ConnectionLost) {

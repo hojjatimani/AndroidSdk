@@ -26,7 +26,7 @@ import java.net.SocketException;
 import java.nio.channels.SocketChannel;
 import java.util.Random;
 
-import rest.bef.FileLog;
+import rest.bef.BefLog;
 
 
 /**
@@ -79,7 +79,7 @@ public class WebSocketWriter extends Handler {
       mOptions = options;
       mBuffer = new ByteBufferOutputStream(options.getMaxFramePayloadSize() + 14, 4*64*1024);
 
-      FileLog.d(TAG, "created");
+      BefLog.v(TAG, "created");
    }
 
 
@@ -401,12 +401,12 @@ public class WebSocketWriter extends Handler {
 
       } catch (SocketException e) {
     	  
-    	  FileLog.d(TAG, "run() : SocketException (" + e.toString() + ")");
+    	  BefLog.v(TAG, "run() : SocketException (" + e.toString() + ")");
     	  
     	  // wrap the exception and notify master
     	  notify(new WebSocketMessage.ConnectionLost());
       } catch (Exception e) {
-         FileLog.e(TAG, e);
+         BefLog.e(TAG, e);
 
          // wrap the exception and notify master
          notify(new WebSocketMessage.Error(e));
@@ -456,7 +456,7 @@ public class WebSocketWriter extends Handler {
 
          mLooper.quit();
 
-         FileLog.d(TAG, "ended");
+         BefLog.v(TAG, "ended");
 
          return;
 

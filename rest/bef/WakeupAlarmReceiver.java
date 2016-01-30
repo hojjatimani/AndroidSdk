@@ -25,7 +25,7 @@ public class WakeupAlarmReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
-        FileLog.d(TAG, "Broadcast received: action=" + action);
+        BefLog.d(TAG, "Befrest Wakeup Time!" + action);
         if (action.equals(Befrest.ACTION_WAKEUP)) {
             Befrest.Util.acquireWakeLock(context);
             context.startService(new Intent(context, PushService.class).putExtra(PushService.WAKEUP, true));

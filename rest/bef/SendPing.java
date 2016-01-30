@@ -35,7 +35,7 @@ public class SendPing extends Thread {
 
     @Override
     public void run() {
-        FileLog.d(TAG, "sendingPing...");
+        BefLog.d(TAG, "Befrest Sending Ping...");
         if (Befrest.Util.isConnectedToInternet(context))
             try {
                 Thread.sleep(500); //sleep a bit to ensure pong receive handlers are ready
@@ -54,10 +54,10 @@ public class SendPing extends Thread {
                 conn.getOutputStream().write(pingData.getBytes());
                 conn.getOutputStream().flush();
                 conn.getOutputStream().close();
-                FileLog.d(TAG, "pingSendStatus: " + conn.getResponseCode() + " " + conn.getResponseMessage());
+                BefLog.v(TAG, "pingSendStatus: " + conn.getResponseCode() + " " + conn.getResponseMessage());
                 conn.disconnect();
             } catch (Exception ex) {
-                FileLog.e(TAG, ex);
+                BefLog.e(TAG, ex);
             }
     }
 }

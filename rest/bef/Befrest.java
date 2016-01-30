@@ -45,6 +45,31 @@ import rest.bef.connectivity.NameValuePair;
  * Main class to interact with Befrest service.
  */
 public final class Befrest {
+    /**
+     * Every Detail Will Be Printed In Logcat.
+     */
+    public static final int LOG_LEVEL_VERBOSE = 2;
+    /**
+     * Data Needed For Debug Will Be Printed.
+     */
+    public static final int LOG_LEVEL_DEBUG = 3;
+    /**
+     * Standard Level. You Will Be Aware Of Befrest's Main State
+     */
+    public static final int LOG_LEVEL_INFO = 4;
+    /**
+     * Only Warning And Errors.
+     */
+    public static final int LOG_LEVEL_WARN = 5;
+    /**
+     * Only Errors.
+     */
+    public static final int LOG_LEVEL_ERROR = 6;
+    /**
+     * None Of Befrest Logs Will Be Shown.
+     */
+    public static final int LOG_LEVEL_NO_LOG = 100;
+
     private static String TAG = "Befrest";
 
     /**
@@ -57,12 +82,14 @@ public final class Befrest {
     private static final String PREF_CHECK_IN_DEEP_SLEEP = "PREF_CHECK_IN_DEEP_SLEEP";
     private static final String PREF_TOPICS = "PREF_TOPICS";
     private static final String PREF_IS_SERVICE_STARTED = "PREF_IS_SERVICE_STARTED";
+    private static final String PREF_LOG_LEVEL = "PREF_LOG_LEVEL";
 
     static final String ACTION_BEFREST_PUSH = "rest.bef.broadcasts.ACTION_BEFREST_PUSH";
     static final String BROADCAST_TYPE = "BROADCAST_TYPE";
 
 
     static boolean LegalStop = false;
+    private static int logLevel = -1;
 
     class BroadcastType {
         static final int PUSH = 0;
@@ -187,7 +214,7 @@ public final class Befrest {
             topics += "-";
         topics += topicName;
         prefs.edit().putString(PREF_TOPICS, topics).commit();
-        FileLog.d(TAG, "topics: " + topics);
+        BefLog.i(TAG, "topics: " + topics);
     }
 
     /**
@@ -214,6 +241,7 @@ public final class Befrest {
         if (t.length() > 0) t = t.substring(0, t.length() - 1);
         if (t.length() == 0) t = null;
         prefs.edit().putString(PREF_TOPICS, t).commit();
+        BefLog.i(TAG, "topics: " + topics);
     }
 
     /**
@@ -257,6 +285,7 @@ public final class Befrest {
     public static boolean refresh(Context context) {
         if (!Util.isConnectedToInternet(context) || !isServiceStarted(context))
             return false;
+        BefLog.i(TAG, "Befrest Is Refreshing ...");
         Util.enableConnectivityChangeListenerIfNeeded(context);
         if (refreshIsRequested && (System.currentTimeMillis() - lastAcceptedRefreshRequestTime) < 10 * 1000)
             return true;
@@ -288,6 +317,15 @@ public final class Befrest {
     public static void unregisterPushReceiver(Context context, BefrestPushReceiver receiver) {
         context.unregisterReceiver(receiver);
     }
+
+    public static void setLogLevel(Context context, int logLevel) {
+        if (logLevel < 0) BefLog.i(TAG, "invalid LogLevel!");
+        else {
+            context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putInt(PREF_LOG_LEVEL, logLevel).commit();
+            Befrest.logLevel = logLevel;
+        }
+    }
+
 
 
     public static int getSdkVersion() {
@@ -331,7 +369,7 @@ public final class Befrest {
         PendingIntent broadcast = PendingIntent.getBroadcast(appContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
         //by using InexatRepeating only pre defined intervals can be used
         alarmMgr.setInexactRepeating(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + AlarmManager.INTERVAL_HOUR, AlarmManager.INTERVAL_HOUR, broadcast);
-        FileLog.d(TAG, "Scheduled For Wake Up");
+        BefLog.d(TAG, "Befrest Scheduled For Waking Device Up.");
     }
 
     private static void cancelWakeUP(Context context) {
@@ -342,7 +380,7 @@ public final class Befrest {
         PendingIntent broadcast = PendingIntent.getBroadcast(appContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
         alarmMgr.cancel(broadcast);
         broadcast.cancel();
-        FileLog.d(TAG, "Wakeup Canceled");
+        BefLog.d(TAG, "Befrest Wakeup Canceled");
     }
 
     static class Util {
@@ -372,9 +410,9 @@ public final class Befrest {
          */
         static void acquireWakeLock(Context context) {
             Context appContext = context.getApplicationContext();
-            FileLog.d(TAG, "acquireWakeLock()");
+            BefLog.d(TAG, "Befrest Acquire WakeLock");
             if (wakeLock == null) {
-                FileLog.d(TAG, "init wake lock");
+                BefLog.v(TAG, "init wake lock");
                 PowerManager mgr =
                         (PowerManager) appContext.getSystemService(Context.POWER_SERVICE);
                 wakeLock = mgr.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG + ".WAKELOCK");
@@ -387,14 +425,14 @@ public final class Befrest {
          * Release the wakelock acquired before
          */
         protected static void releaseWakeLock() {
-            FileLog.d(TAG, "releaseWakeLock()");
+            BefLog.v(TAG, "releaseWakeLock()");
             if (wakeLock != null && wakeLock.isHeld()) {
                 try {
                     wakeLock.release();
                     wakeLock = null;
-                    FileLog.d(TAG, "WakeLockReleased");
+                    BefLog.d(TAG, "Befrest WakeLock Released");
                 } catch (Exception e) {
-                    FileLog.e(TAG, e);
+                    BefLog.e(TAG, e);
                 }
             }
         }
@@ -403,10 +441,10 @@ public final class Befrest {
          * Release the wifilock acquired before
          */
         static void releaseWifiLock() {
-            Log.d(TAG, "releaseWifiLock()");
+            Log.v(TAG, "releaseWifiLock()");
             if (wifiLock != null && wifiLock.isHeld()) {
                 wifiLock.release();
-                FileLog.d(TAG, "wifiLock released");
+                BefLog.d(TAG, "Befrest WifiLock Released");
             }
             wifiLock = null;
         }
@@ -418,7 +456,7 @@ public final class Befrest {
             WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
             wifiLock = wifiManager.createWifiLock(/* WifiManager.WIFI_MODE_FULL_HIGH_PERF */0x3, TAG + ".WIFI_LOCK");
             wifiLock.acquire();
-            FileLog.d(TAG, "wifiLock acquired");
+            BefLog.d(TAG, "Befrest WifiLock Acquired");
         }
 
         /**
@@ -434,14 +472,14 @@ public final class Befrest {
             ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo wifiInfo = connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
             boolean res = wifiInfo.isConnectedOrConnecting();
-            Log.d(TAG, "isWifiConnectedOrConnecting() returned: " + res);
+            Log.v(TAG, "isWifiConnectedOrConnecting() returned: " + res);
             return res;
         }
 
         static boolean isWifiEnabled(Context context) {
             WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
             boolean res;
-            FileLog.d(TAG, "isWifiEnabled: " + (res = wifiManager.isWifiEnabled()));
+            BefLog.v(TAG, "isWifiEnabled: " + (res = wifiManager.isWifiEnabled()));
             return res;
         }
 
@@ -457,13 +495,13 @@ public final class Befrest {
                 // Catching exception which should not occur on most
                 // devices. OS bug details at :
                 // https://code.google.com/p/android/issues/detail?id=22036
-                FileLog.e(TAG, e);
+                BefLog.e(TAG, e);
             }
             wifiManager.disconnect();
             wifiManager.startScan();
             wifiManager.reassociate();
             wifiManager.reconnect();
-            FileLog.d(TAG, "connect wifi ...");
+            BefLog.v(TAG, "Befrest Asking Wifi To Connect ...");
         }
 
         static boolean isUserInteractive(Context context) {
@@ -479,7 +517,6 @@ public final class Befrest {
                 String chId = prefs.getString(PREF_CH_ID, "");
                 subscribeUrl = String.format(Locale.US, "ws://gw.bef.rest:8000/xapi/%d/subscribe/%d/%s/%d", API_VERSION, uId, chId, SDK_VERSION);
             }
-            Log.d(TAG, "getSubscribeUri: " + subscribeUrl);
             return subscribeUrl;
         }
 
@@ -522,7 +559,7 @@ public final class Befrest {
             boolean isConnectedToInternet = isConnectedToInternet(context);
             boolean isConnectivityChangeListenerDisabled = pm.getComponentEnabledSetting(receiver) == PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
             boolean isServiceStarted = isServiceStarted(context);
-            FileLog.m(TAG, "isConnectedToInternet, isConnectivityChangeListenerDisabled, isServiceStarted", isConnectedToInternet, isConnectivityChangeListenerDisabled, isServiceStarted);
+            BefLog.v(TAG, "isConnectedToInternet, isConnectivityChangeListenerDisabled, isServiceStarted", isConnectedToInternet, isConnectivityChangeListenerDisabled, isServiceStarted);
             if (!isConnectedToInternet && isConnectivityChangeListenerDisabled && isServiceStarted)
                 enableConnectivityChangeListener(context);
         }
@@ -533,7 +570,7 @@ public final class Befrest {
             pm.setComponentEnabledSetting(receiver,
                     PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                     PackageManager.DONT_KILL_APP);
-            FileLog.d(TAG, "Connectivity change listener disabled");
+            BefLog.v(TAG, "Befrest Connectivity change listener disabled");
         }
 
         static void enableConnectivityChangeListener(Context context) {
@@ -542,7 +579,7 @@ public final class Befrest {
             pm.setComponentEnabledSetting(receiver,
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                     PackageManager.DONT_KILL_APP);
-            FileLog.d(TAG, "Connectivity change listener enabled");
+            BefLog.v(TAG, "Befrest Connectivity change listener enabled");
         }
 
         static String decodeBase64(String s) {

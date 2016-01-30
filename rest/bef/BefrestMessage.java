@@ -21,8 +21,6 @@ import android.os.Parcelable;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.Serializable;
-
 public final class BefrestMessage implements Parcelable {
     private static final String TAG = "BefrestMessage";
 
@@ -49,12 +47,12 @@ public final class BefrestMessage implements Parcelable {
                         type = MsgType.BATCH;
                         break;
                     default:
-                        FileLog.d(TAG, "Unknown Msg Type!!!");
+                        BefLog.e(TAG, "Befrest Internal ERROR! Unknown Received Push Type!!!");
                 }
             data = Befrest.Util.decodeBase64(jsObject.getString("m"));
             timeStamp = jsObject.getString("ts");
         } catch (JSONException e) {
-            FileLog.e(TAG, e);
+            BefLog.e(TAG, e);
         }
     }
 
@@ -69,8 +67,8 @@ public final class BefrestMessage implements Parcelable {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        return sb.append(" data:").append(data)
-                .append(" time:").append(timeStamp).toString();
+        return sb.append(" data: ").append(data)
+                .append("        time: ").append(timeStamp).toString();
     }
 
     @Override
