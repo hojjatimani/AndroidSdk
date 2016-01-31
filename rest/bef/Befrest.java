@@ -1,12 +1,12 @@
 /******************************************************************************
  * Copyright 2015-2016 Befrest
- * <p>
+ * <p/>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p>
+ * <p/>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -45,6 +45,53 @@ import rest.bef.connectivity.NameValuePair;
  * Main class to interact with Befrest service.
  */
 public final class Befrest {
+    private static volatile Befrest instance;
+
+    private Befrest(Context context) {
+        this.context = context.getApplicationContext();
+        SharedPreferences prefs = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
+        uId = prefs.getLong(PREF_U_ID, -1);
+        chId = prefs.getString(PREF_CH_ID, null);
+        auth = prefs.getString(PREF_AUTH, null);
+        topics = prefs.getString(PREF_TOPICS, "");
+        logLevel = prefs.getInt(PREF_LOG_LEVEL, LOG_LEVEL_DEFAULT);
+        checkInSleep = prefs.getBoolean(PREF_CHECK_IN_DEEP_SLEEP, false);
+        isServiceStarted = prefs.getBoolean(PREF_IS_SERVICE_STARTED, false);
+    }
+
+    public static Befrest getInstance(Context context) {
+        if (instance != null) return instance;
+        synchronized (Befrest.class) {
+            if (instance == null) {
+                instance = new Befrest(context);
+            }
+        }
+        return instance;
+    }
+
+    Context context;
+    long uId;
+    String chId;
+    String auth;
+    int logLevel;
+    boolean checkInSleep;
+    boolean isServiceStarted;
+    String topics;
+
+    boolean refreshIsRequested = false;
+    long lastAcceptedRefreshRequestTime = 0;
+
+    //    boolean somethingChanged;
+    volatile boolean legalStop = false;
+
+    private static final int[] AuthProblemBroadcastDelay = {0, 5 * 1000, 10 * 1000, 25 * 1000, 50 * 1000};
+    int prevAuthProblems = 0;
+
+    private String pingUrl;
+    private String subscribeUrl;
+    private List<NameValuePair> subscribeHeaders;
+    private NameValuePair authHeader;
+
     /**
      * Every Detail Will Be Printed In Logcat.
      */
@@ -70,6 +117,8 @@ public final class Befrest {
      */
     public static final int LOG_LEVEL_NO_LOG = 100;
 
+    private static final int LOG_LEVEL_DEFAULT = LOG_LEVEL_INFO;
+
     private static String TAG = "Befrest";
 
     /**
@@ -84,27 +133,6 @@ public final class Befrest {
     private static final String PREF_IS_SERVICE_STARTED = "PREF_IS_SERVICE_STARTED";
     private static final String PREF_LOG_LEVEL = "PREF_LOG_LEVEL";
 
-    static final String ACTION_BEFREST_PUSH = "rest.bef.broadcasts.ACTION_BEFREST_PUSH";
-    static final String BROADCAST_TYPE = "BROADCAST_TYPE";
-
-
-    static boolean LegalStop = false;
-    private static int logLevel = -1;
-
-    class BroadcastType {
-        static final int PUSH = 0;
-        static final int UNAUTHORIZED = 1;
-        static final int CONNECTION_REFRESHED = 2;
-    }
-
-    protected static final String ACTION_WAKEUP = "rest.bef.broadcasts.WAKEUP";
-
-    private static boolean checkInSleep = false;
-
-    static boolean refreshIsRequested = false;
-    static long lastAcceptedRefreshRequestTime = 0;
-
-
     /**
      * Initialize push receive service. You can also use setter messages for initializing.
      *
@@ -112,59 +140,61 @@ public final class Befrest {
      * @param auth Authentication token
      * @param chId chId
      */
-    public static void init(Context context, long uId, String auth, String chId) {
-        if (context == null)
-            throw new IllegalArgumentException("context can't be null!");
+    public Befrest init(long uId, String auth, String chId) {
         if (chId == null || !(chId.length() > 0))
             throw new IllegalArgumentException("invalid chId!");
-        System.setProperty("http.keepAlive", "false"); //prevent CONNECTION RESET BY PEER Exception in sending http request.This is needed for some devices
-        saveCredentials(context, uId, auth, chId);
+        this.uId = uId;
+        this.auth = auth;
+        this.chId = chId;
+        clearTempData();
+        saveToPrefs(context, uId, auth, chId);
+        return this;
     }
 
     /**
      * set uId.
      *
-     * @param context Context
-     * @param uId     uId
+     * @param uId uId
      */
-    public static void setUId(Context context, long uId) {
-        if (context == null)
-            throw new IllegalArgumentException("context can't be null!");
+    public Befrest setUId(long uId) {
+        this.uId = uId;
+        clearTempData();
         SharedPreferences.Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
         prefEditor.putLong(PREF_U_ID, uId);
         prefEditor.commit();
+        return this;
     }
 
     /**
      * set chId.
      *
-     * @param context Context
-     * @param chId    chId
+     * @param chId chId
      */
-    public static void setChId(Context context, String chId) {
-        if (context == null)
-            throw new IllegalArgumentException("context can't be null!");
+    public Befrest setChId(String chId) {
         if (chId == null || !(chId.length() > 0))
             throw new IllegalArgumentException("invalid chId!");
+        this.chId = chId;
+        clearTempData();
         SharedPreferences.Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
         prefEditor.putString(PREF_CH_ID, chId);
         prefEditor.commit();
+        return this;
     }
 
     /**
      * set Authentication token.
      *
-     * @param context Context
-     * @param auth    Authentication Token
+     * @param auth Authentication Token
      */
-    public static void setAuth(Context context, String auth) {
-        if (context == null)
-            throw new IllegalArgumentException("context can't be null!");
+    public Befrest setAuth(String auth) {
         if (auth == null || !(auth.length() > 0))
             throw new IllegalArgumentException("invalid auth!");
+        this.auth = auth;
+        clearTempData();
         SharedPreferences.Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
         prefEditor.putString(PREF_AUTH, auth);
         prefEditor.commit();
+        return this;
     }
 
     /**
@@ -174,86 +204,73 @@ public final class Befrest {
      *
      * @throws IllegalStateException if be called without a prior call to init()
      */
-    public static void start(Context context) {
-        if (!isServiceInitialized(context))
-            throw new IllegalStateException("uId and chId are not defined!!!");
-        LegalStop = true;
+    public void start() {
+        if (uId < 0 || chId == null || chId.length() < 1)
+            throw new IllegalStateException("uId and chId are not properly defined!");
+        legalStop = true;
         context.stopService(new Intent(context, PushService.class)); // stop service if is running with old credentials
-        LegalStop = false;
-        Util.clearTempCredentials(); //clear temp if data to be reCalculated
         context.startService(new Intent(context, PushService.class).putExtra(PushService.CONNECT, true));
-        context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putBoolean(PREF_IS_SERVICE_STARTED, true).commit();
+        setServiceStarted(true);
         Util.enableConnectivityChangeListenerIfNeeded(context);
-        if (isCheckInSleepEnabled(context)) scheduleWakeUP(context);
+        if (checkInSleep) scheduleWakeUP();
     }
 
     /**
      * Stop push service.
      * You can call start to run the service later.
      */
-    public static void stop(Context context) {
-        LegalStop = true;
+    public void stop() {
+        legalStop = true;
         context.stopService(new Intent(context, PushService.class));
-        LegalStop = false;
-        cancelWakeUP(context);
+        cancelWakeUP();
+        cancelStartServiceAlarm();
         Util.disableConnectivityChangeListener(context);
-        context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putBoolean(PREF_IS_SERVICE_STARTED, false).commit();
+        setServiceStarted(false);
     }
 
-    public static void addTopic(Context context, String topicName) {
-        if (context == null)
-            throw new IllegalArgumentException("context can't be null!");
+    public Befrest addTopic(String topicName) {
         if (topicName == null || topicName.length() < 1 || !topicName.matches("[A-Za-z0-9]+"))
             throw new IllegalArgumentException("topic name should be an alpha-numeric string!");
-        SharedPreferences prefs = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
-        String topics = prefs.getString(PREF_TOPICS, "");
         for (String s : topics.split("-"))
             if (s.equals(topicName))
-                return;
+                return this;
         if (topics.length() > 0)
             topics += "-";
         topics += topicName;
-        prefs.edit().putString(PREF_TOPICS, topics).commit();
+        updateTpics(topics);
         BefLog.i(TAG, "topics: " + topics);
+        return this;
     }
 
     /**
      * remove a topic from current topics that user has.
      *
-     * @param context   Context
-     * @param topicCode Name of topic to be added
+     * @param topicName Name of topic to be added
      */
-    public static void removeTopic(Context context, String topicCode) {
-        if (context == null)
-            throw new IllegalArgumentException("context can't be null!");
-        SharedPreferences prefs = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
-        String t = prefs.getString(PREF_TOPICS, "");
-        String[] topics = t.split("-");
+    public Befrest removeTopic(String topicName) {
+        String[] splitedTopics = topics.split("-");
         boolean found = false;
-        t = "";
-        for (int i = 0; i < topics.length; i++) {
-            if (topics[i].equals(topicCode))
+        String resTopics = "";
+        for (int i = 0; i < splitedTopics.length; i++) {
+            if (splitedTopics[i].equals(topicName))
                 found = true;
-            else t += topics[i] + "-";
+            else resTopics += splitedTopics[i] + "-";
         }
         if (!found)
             throw new IllegalArgumentException("Topic Not Exist!");
-        if (t.length() > 0) t = t.substring(0, t.length() - 1);
-        if (t.length() == 0) t = null;
-        prefs.edit().putString(PREF_TOPICS, t).commit();
+        if (resTopics.length() > 0) resTopics = resTopics.substring(0, resTopics.length() - 1);
+        updateTpics(resTopics);
         BefLog.i(TAG, "topics: " + topics);
+        return this;
     }
 
     /**
      * get List of currently added topics
      *
-     * @param context Context
      * @return Topics List
      */
-    public static String[] getCurrentTopics(Context context) {
-        SharedPreferences prefs = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
-        String topics = prefs.getString(PREF_TOPICS, null);
-        if (topics != null && topics.length() > 0)
+    public String[] getCurrentTopics() {
+        if (topics.length() > 0)
             return topics.split("-");
         return new String[0];
     }
@@ -261,29 +278,29 @@ public final class Befrest {
     /**
      * Minimizes push delay when device is in deep sleep.
      * You <i><b>SHOULD NOT</b></i> enable this feature unless you really need it as it might cause battery drain.
-     *
-     * @param context Context
      */
-    public static void enableCheckInSleep(Context context) {
-        Befrest.checkInSleep = true;
+    public Befrest enableCheckInSleep() {
+        checkInSleep = true;
         context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putBoolean(PREF_CHECK_IN_DEEP_SLEEP, true).commit();
+        if (isServiceStarted) scheduleWakeUP();
+        return this;
     }
 
-    public static void disableCheckInSleep(Context context) {
-        Befrest.checkInSleep = false;
+    public Befrest disableCheckInSleep() {
+        checkInSleep = false;
         context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putBoolean(PREF_CHECK_IN_DEEP_SLEEP, false).commit();
-        cancelWakeUP(context);
+        cancelWakeUP();
+        return this;
     }
 
     /**
      * Request the push service to refresh its connection. You will be notified through your receivers whenever
      * the connection refreshed.
      *
-     * @param context Context
      * @return true if a request was accepted, false otherwise.
      */
-    public static boolean refresh(Context context) {
-        if (!Util.isConnectedToInternet(context) || !isServiceStarted(context))
+    public boolean refresh() {
+        if (!Util.isConnectedToInternet(context) || !isServiceStarted)
             return false;
         BefLog.i(TAG, "Befrest Is Refreshing ...");
         Util.enableConnectivityChangeListenerIfNeeded(context);
@@ -299,40 +316,55 @@ public final class Befrest {
      * Register a new push receiver. Any registered receiver <i><b>must be</b></i> unregistered by passing the same receiver object
      * to {@link #unregisterPushReceiver}. Actually the method registers a BroadcastReceiver considering security using permissions.
      *
-     * @param context  Context
      * @param receiver the receiver object that will receive events
      */
-    public static void registerPushReceiver(Context context, BefrestPushReceiver receiver) {
+    public void registerPushReceiver(BefrestPushReceiver receiver) {
         IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction(Befrest.ACTION_BEFREST_PUSH);
+        intentFilter.addAction(BefrestPushReceiver.ACTION_BEFREST_PUSH);
         context.registerReceiver(receiver, intentFilter, Util.getBroadcastSendingPermission(context), null);
     }
 
     /**
      * Unregister a previously registered push receiver.
      *
-     * @param context  Context
      * @param receiver receiver object to be unregistered
      */
-    public static void unregisterPushReceiver(Context context, BefrestPushReceiver receiver) {
+    public void unregisterPushReceiver(BefrestPushReceiver receiver) {
         context.unregisterReceiver(receiver);
     }
 
-    public static void setLogLevel(Context context, int logLevel) {
+    public Befrest setLogLevel(int logLevel) {
         if (logLevel < 0) BefLog.i(TAG, "invalid LogLevel!");
         else {
             context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putInt(PREF_LOG_LEVEL, logLevel).commit();
-            Befrest.logLevel = logLevel;
+            this.logLevel = logLevel;
         }
+        return this;
     }
 
+    public static int getLogLevel() {
+        if (instance != null)
+            return instance.logLevel;
+        return LOG_LEVEL_DEFAULT;
+    }
 
 
     public static int getSdkVersion() {
         return Util.SDK_VERSION;
     }
 
-    private static void saveCredentials(Context context, long uId, String AUTH, String chId) {
+
+    private void updateTpics(String topics) {
+        this.topics = topics;
+        context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putString(PREF_TOPICS, topics).commit();
+    }
+
+    private void setServiceStarted(boolean b) {
+        isServiceStarted = b;
+        context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putBoolean(PREF_IS_SERVICE_STARTED, isServiceStarted).commit();
+    }
+
+    private static void saveToPrefs(Context context, long uId, String AUTH, String chId) {
         SharedPreferences.Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
         prefEditor.putLong(PREF_U_ID, uId);
         prefEditor.putString(PREF_AUTH, AUTH);
@@ -340,47 +372,83 @@ public final class Befrest {
         prefEditor.commit();
     }
 
-    private static boolean isServiceInitialized(Context context) {
-        SharedPreferences preferences = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
-        if (preferences.contains(PREF_U_ID) && preferences.contains(PREF_CH_ID))
-            return (true);
-        return false;
-    }
-
-    private static boolean isServiceStarted(Context context) {
-        SharedPreferences preferences = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
-        return preferences.getBoolean(PREF_IS_SERVICE_STARTED, false);
-    }
-
-    private static boolean isCheckInSleepEnabled(Context context) {
-        if (checkInSleep)
-            return true;
-        SharedPreferences preferences = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
-        if (preferences.getBoolean(PREF_CHECK_IN_DEEP_SLEEP, false))
-            return (checkInSleep = true);
-        return false;
-    }
-
-    private static void scheduleWakeUP(Context context) {
-        Context appContext = context.getApplicationContext();
-        AlarmManager alarmMgr = (AlarmManager) appContext.getSystemService(Context.ALARM_SERVICE);
-        Intent intent = new Intent(appContext, WakeupAlarmReceiver.class);
-        intent.setAction(ACTION_WAKEUP);
-        PendingIntent broadcast = PendingIntent.getBroadcast(appContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+    private void scheduleWakeUP() {
+        AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(context, WakeupAlarmReceiver.class);
+        intent.setAction(WakeupAlarmReceiver.ACTION_WAKEUP);
+        PendingIntent broadcast = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
         //by using InexatRepeating only pre defined intervals can be used
         alarmMgr.setInexactRepeating(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + AlarmManager.INTERVAL_HOUR, AlarmManager.INTERVAL_HOUR, broadcast);
         BefLog.d(TAG, "Befrest Scheduled For Waking Device Up.");
     }
 
-    private static void cancelWakeUP(Context context) {
-        Context appContext = context.getApplicationContext();
-        AlarmManager alarmMgr = (AlarmManager) appContext.getSystemService(Context.ALARM_SERVICE);
-        Intent intent = new Intent(appContext, WakeupAlarmReceiver.class);
-        intent.setAction(ACTION_WAKEUP);
-        PendingIntent broadcast = PendingIntent.getBroadcast(appContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+    private void cancelWakeUP() {
+        AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(context, WakeupAlarmReceiver.class);
+        intent.setAction(WakeupAlarmReceiver.ACTION_WAKEUP);
+        PendingIntent broadcast = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
         alarmMgr.cancel(broadcast);
         broadcast.cancel();
         BefLog.d(TAG, "Befrest Wakeup Canceled");
+    }
+
+    private void clearTempData() {
+        subscribeUrl = null;
+        subscribeHeaders = null;
+        pingUrl = null;
+        authHeader = null;
+    }
+
+    String getSubscribeUri() {
+        if (subscribeUrl == null)
+            subscribeUrl = String.format(Locale.US, "ws://gw.bef.rest:8000/xapi/%d/subscribe/%d/%s/%d", Util.API_VERSION, uId, chId, Util.SDK_VERSION);
+        return subscribeUrl;
+    }
+
+    List<NameValuePair> getSubscribeHeaders() {
+        if (subscribeHeaders == null) {
+            subscribeHeaders = new ArrayList<>();
+            subscribeHeaders.add(getAuthHeader());
+            if (topics != null && topics.length() > 0)
+                subscribeHeaders.add(new NameValuePair("X-BF-TOPICS", topics));
+        }
+        return subscribeHeaders;
+    }
+
+    NameValuePair getAuthHeader() {
+        if (authHeader == null) {
+            authHeader = new NameValuePair("X-BF-AUTH", auth);
+        }
+        return authHeader;
+    }
+
+    String getPingUrl() {
+        if (pingUrl == null) {
+            pingUrl = String.format(Locale.US, "https://gw.bef.rest:8443/xapi/%d/ping/%d/%s/%d", Util.API_VERSION, uId, chId, Util.SDK_VERSION);
+        }
+        return pingUrl;
+    }
+
+    void setStartServiceAlarm() {
+        AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(context, PushService.class).putExtra(PushService.START, true);
+        PendingIntent pi = PendingIntent.getService(context, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        alarmMgr.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + PushService.startServiceAgainDelay, pi);
+        BefLog.d(TAG, "Befrest Scheduled To Start Service in " + PushService.startServiceAgainDelay);
+    }
+
+    void cancelStartServiceAlarm() {
+        AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(context, PushService.class).putExtra(PushService.START, true);
+        PendingIntent pi = PendingIntent.getService(context, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        alarmMgr.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + PushService.startServiceAgainDelay, pi);
+        alarmMgr.cancel(pi);
+        pi.cancel();
+        BefLog.d(TAG, "Befrest Start Service Again Canceled.");
+    }
+
+    int getSendOnAuthorizeBroadcastDelay() {
+        return AuthProblemBroadcastDelay[prevAuthProblems < AuthProblemBroadcastDelay.length ? prevAuthProblems : AuthProblemBroadcastDelay.length - 1];
     }
 
     static class Util {
@@ -392,18 +460,6 @@ public final class Befrest {
 
         private static WifiManager.WifiLock wifiLock;
         private static PowerManager.WakeLock wakeLock = null;
-
-        private static String pingUrl;
-        private static String subscribeUrl;
-        private static List<NameValuePair> subscribeHeaders;
-        private static NameValuePair authHeader;
-
-        static void clearTempCredentials() {
-            pingUrl = null;
-            subscribeUrl = null;
-            subscribeHeaders = null;
-            authHeader = null;
-        }
 
         /**
          * Acquire a wakelock
@@ -510,45 +566,6 @@ public final class Befrest {
             return false;
         }
 
-        static String getSubscribeUri(Context context) {
-            if (subscribeUrl == null) {
-                SharedPreferences prefs = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
-                long uId = prefs.getLong(PREF_U_ID, 0);
-                String chId = prefs.getString(PREF_CH_ID, "");
-                subscribeUrl = String.format(Locale.US, "ws://gw.bef.rest:8000/xapi/%d/subscribe/%d/%s/%d", API_VERSION, uId, chId, SDK_VERSION);
-            }
-            return subscribeUrl;
-        }
-
-        static List<NameValuePair> getSubscribeHeaders(Context context) {
-            if (subscribeHeaders == null) {
-                subscribeHeaders = new ArrayList<>();
-                subscribeHeaders.add(getAuthHeader(context));
-                String topics = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).getString(PREF_TOPICS, null);
-                if (topics != null && topics.length() > 0)
-                    subscribeHeaders.add(new NameValuePair("X-BF-TOPICS", topics));
-            }
-            return subscribeHeaders;
-        }
-
-        static NameValuePair getAuthHeader(Context context) {
-            if (authHeader == null) {
-                String authToken = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).getString(PREF_AUTH, "authToken");
-                authHeader = new NameValuePair("X-BF-AUTH", authToken);
-            }
-            return authHeader;
-        }
-
-        static String getPingUrl(Context context) {
-            if (pingUrl == null) {
-                SharedPreferences prefs = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
-                long uId = prefs.getLong(PREF_U_ID, 0);
-                String chId = prefs.getString(PREF_CH_ID, "");
-                pingUrl = String.format(Locale.US, "https://gw.bef.rest:8443/xapi/%d/ping/%d/%s/%d", API_VERSION, uId, chId, SDK_VERSION);
-            }
-            return pingUrl;
-        }
-
         static String getBroadcastSendingPermission(Context context) {
             return context.getApplicationContext().getPackageName() + BROADCAST_SENDING_PERMISSION_POSTFIX;
         }
@@ -558,7 +575,7 @@ public final class Befrest {
             PackageManager pm = context.getPackageManager();
             boolean isConnectedToInternet = isConnectedToInternet(context);
             boolean isConnectivityChangeListenerDisabled = pm.getComponentEnabledSetting(receiver) == PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
-            boolean isServiceStarted = isServiceStarted(context);
+            boolean isServiceStarted = Befrest.getInstance(context).isServiceStarted;
             BefLog.v(TAG, "isConnectedToInternet, isConnectivityChangeListenerDisabled, isServiceStarted", isConnectedToInternet, isConnectivityChangeListenerDisabled, isServiceStarted);
             if (!isConnectedToInternet && isConnectivityChangeListenerDisabled && isServiceStarted)
                 enableConnectivityChangeListener(context);

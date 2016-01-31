@@ -26,24 +26,35 @@ import android.os.Parcelable;
  * either dynamically in code or statically in projects AndroidManifest file.
  */
 public abstract class BefrestPushReceiver extends BroadcastReceiver {
+
+    static final int PUSH = 0;
+    static final int UNAUTHORIZED = 1;
+    static final int CONNECTION_REFRESHED = 2;
+    static final int BEFREST_CONNECTED = 3;
+    static final String BROADCAST_TYPE = "BROADCAST_TYPE";
+    static final String ACTION_BEFREST_PUSH = "rest.bef.broadcasts.ACTION_BEFREST_PUSH";
+
     private static final String TAG = "BefrestPushReceiver";
 
     @Override
     public final void onReceive(Context context, Intent intent) {
-        int type = intent.getIntExtra(Befrest.BROADCAST_TYPE, -1);
+        int type = intent.getIntExtra(BROADCAST_TYPE, -1);
         BefLog.v(TAG, "BroadCastReceived : type=" + type);
         switch (type) {
-            case Befrest.BroadcastType.PUSH:
+            case PUSH:
                 Parcelable[] p = intent.getParcelableArrayExtra(Befrest.Util.KEY_MESSAGE_PASSED);
                 BefrestMessage[] bm = new BefrestMessage[p.length];
                 System.arraycopy(p, 0, bm, 0, p.length);
                 onPushReceived(context, bm);
                 break;
-            case Befrest.BroadcastType.UNAUTHORIZED:
+            case UNAUTHORIZED:
                 onAuthorizeProblem(context);
                 break;
-            case Befrest.BroadcastType.CONNECTION_REFRESHED:
+            case CONNECTION_REFRESHED:
                 onConnectionRefreshed(context);
+                break;
+            case BEFREST_CONNECTED:
+                onBefrestConnected(context);
                 break;
             default:
                 BefLog.e(TAG, "Befrest Internal ERROR! Unknown Befrest Action!!");
@@ -68,7 +79,6 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
      * @param context Context
      */
     public void onAuthorizeProblem(Context context) {
-        BefLog.i(TAG, "Befrest Authorization Problem!");
     }
 
     /**
@@ -77,5 +87,13 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
      * @param context Context
      */
     public void onConnectionRefreshed(Context context) {
+    }
+
+    /**
+     * Befrest Connected! This method is called when Befrest Connects to its server.
+     *
+     * @param context
+     */
+    public void onBefrestConnected(Context context) {
     }
 }

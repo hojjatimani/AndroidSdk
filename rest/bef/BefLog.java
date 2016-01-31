@@ -29,7 +29,8 @@ import java.util.Date;
 import java.util.Locale;
 
 public final class BefLog {
-    private static boolean LogToFile = false;
+    private static final String TAG = "BefLog";
+    private static final boolean LogToFile = false;
     private static final String LogsDir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/BefrestLogs";
     private OutputStreamWriter streamWriter = null;
     private SimpleDateFormat dateFormat;
@@ -39,8 +40,7 @@ public final class BefLog {
 
 
     private static int getLogLevel() {
-//        TODO
-        return Befrest.LOG_LEVEL_DEBUG;
+        return  Befrest.getLogLevel();
     }
 
     private static volatile BefLog Instance = null;
@@ -244,7 +244,7 @@ public final class BefLog {
         for (Object o : objects) {
             s += o + ", ";
         }
-        d(TAG, message + " " + "[" + s + "]");
+        v(TAG, message + " " + "[" + s + "]");
     }
 
     public static void cleanupLogs() {

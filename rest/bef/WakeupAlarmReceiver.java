@@ -20,13 +20,14 @@ import android.content.Context;
 import android.content.Intent;
 
 public class WakeupAlarmReceiver extends BroadcastReceiver {
+    protected static final String ACTION_WAKEUP = "rest.bef.broadcasts.WAKEUP";
     private static final String TAG = "WakeupAlarmReceiver";
 
     @Override
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
         BefLog.d(TAG, "Befrest Wakeup Time!" + action);
-        if (action.equals(Befrest.ACTION_WAKEUP)) {
+        if (action.equals(ACTION_WAKEUP)) {
             Befrest.Util.acquireWakeLock(context);
             context.startService(new Intent(context, PushService.class).putExtra(PushService.WAKEUP, true));
         }
