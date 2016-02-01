@@ -207,8 +207,8 @@ public final class Befrest {
     public void start() {
         if (uId < 0 || chId == null || chId.length() < 1)
             throw new IllegalStateException("uId and chId are not properly defined!");
-        legalStop = true;
         context.stopService(new Intent(context, PushService.class)); // stop service if is running with old credentials
+        clearTempData();
         context.startService(new Intent(context, PushService.class).putExtra(PushService.CONNECT, true));
         setServiceStarted(true);
         Util.enableConnectivityChangeListenerIfNeeded(context);
@@ -226,6 +226,7 @@ public final class Befrest {
         cancelStartServiceAlarm();
         Util.disableConnectivityChangeListener(context);
         setServiceStarted(false);
+        BefLog.i(TAG, "Befrest Service Stopped.");
     }
 
     public Befrest addTopic(String topicName) {
@@ -238,7 +239,7 @@ public final class Befrest {
             topics += "-";
         topics += topicName;
         updateTpics(topics);
-        BefLog.i(TAG, "topics: " + topics);
+        BefLog.i(TAG, "Topics: " + topics);
         return this;
     }
 
@@ -260,7 +261,7 @@ public final class Befrest {
             throw new IllegalArgumentException("Topic Not Exist!");
         if (resTopics.length() > 0) resTopics = resTopics.substring(0, resTopics.length() - 1);
         updateTpics(resTopics);
-        BefLog.i(TAG, "topics: " + topics);
+        BefLog.i(TAG, "Topics: " + topics);
         return this;
     }
 
@@ -334,7 +335,7 @@ public final class Befrest {
     }
 
     public Befrest setLogLevel(int logLevel) {
-        if (logLevel < 0) BefLog.i(TAG, "invalid LogLevel!");
+        if (logLevel < 0) BefLog.i(TAG, "Invalid Log Level!");
         else {
             context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putInt(PREF_LOG_LEVEL, logLevel).commit();
             this.logLevel = logLevel;
@@ -357,6 +358,7 @@ public final class Befrest {
     private void updateTpics(String topics) {
         this.topics = topics;
         context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putString(PREF_TOPICS, topics).commit();
+        clearTempData();
     }
 
     private void setServiceStarted(boolean b) {
@@ -379,7 +381,7 @@ public final class Befrest {
         PendingIntent broadcast = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
         //by using InexatRepeating only pre defined intervals can be used
         alarmMgr.setInexactRepeating(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + AlarmManager.INTERVAL_HOUR, AlarmManager.INTERVAL_HOUR, broadcast);
-        BefLog.d(TAG, "Befrest Scheduled For Waking Device Up.");
+        BefLog.d(TAG, "Befrest Scheduled To Wake Device Up.");
     }
 
     private void cancelWakeUP() {
@@ -434,7 +436,7 @@ public final class Befrest {
         Intent intent = new Intent(context, PushService.class).putExtra(PushService.START, true);
         PendingIntent pi = PendingIntent.getService(context, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT);
         alarmMgr.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + PushService.startServiceAgainDelay, pi);
-        BefLog.d(TAG, "Befrest Scheduled To Start Service in " + PushService.startServiceAgainDelay);
+        BefLog.d(TAG, "Befrest Scheduled To Start Service In " + PushService.startServiceAgainDelay + "ms");
     }
 
     void cancelStartServiceAlarm() {
@@ -444,7 +446,7 @@ public final class Befrest {
         alarmMgr.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + PushService.startServiceAgainDelay, pi);
         alarmMgr.cancel(pi);
         pi.cancel();
-        BefLog.d(TAG, "Befrest Start Service Again Canceled.");
+        BefLog.d(TAG, "Befrest Wont Start Service In Future.");
     }
 
     int getSendOnAuthorizeBroadcastDelay() {
@@ -466,7 +468,7 @@ public final class Befrest {
          */
         static void acquireWakeLock(Context context) {
             Context appContext = context.getApplicationContext();
-            BefLog.d(TAG, "Befrest Acquire WakeLock");
+            BefLog.d(TAG, "Befrest Acquired A WakeLock");
             if (wakeLock == null) {
                 BefLog.v(TAG, "init wake lock");
                 PowerManager mgr =
@@ -486,7 +488,7 @@ public final class Befrest {
                 try {
                     wakeLock.release();
                     wakeLock = null;
-                    BefLog.d(TAG, "Befrest WakeLock Released");
+                    BefLog.d(TAG, "Befrest WakeLock Released.");
                 } catch (Exception e) {
                     BefLog.e(TAG, e);
                 }
@@ -512,7 +514,7 @@ public final class Befrest {
             WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
             wifiLock = wifiManager.createWifiLock(/* WifiManager.WIFI_MODE_FULL_HIGH_PERF */0x3, TAG + ".WIFI_LOCK");
             wifiLock.acquire();
-            BefLog.d(TAG, "Befrest WifiLock Acquired");
+            BefLog.d(TAG, "Befrest Acquired A WifiLock");
         }
 
         /**

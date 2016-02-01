@@ -78,6 +78,12 @@ public class WebSocketConnection implements WebSocket {
         public void run() {
             Thread.currentThread().setName("WebSocketConnector");
 
+            //HOJJAT: wait a bit
+            try {
+                Thread.sleep(700);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
 			/*
              * connect TCP socket
 			 */
@@ -370,6 +376,9 @@ public class WebSocketConnection implements WebSocket {
      */
     public boolean reconnect() {
         if (!isConnected() && (mWsUri != null)) {
+            //HOJJAT:
+            //this is dangeruous!!! because it is creating a connector thread without
+            //setting it to connector. so this thread might not be joined when disconnecting
             new WebSocketConnector().start();
             return true;
         }

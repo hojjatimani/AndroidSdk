@@ -642,7 +642,7 @@ public class WebSocketReader extends Thread {
     @Override
     public void run() {
 
-        BefLog.d(TAG, "running");
+        BefLog.d(TAG, "Running");
 
         try {
 

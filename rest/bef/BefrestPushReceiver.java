@@ -39,7 +39,6 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
     @Override
     public final void onReceive(Context context, Intent intent) {
         int type = intent.getIntExtra(BROADCAST_TYPE, -1);
-        BefLog.v(TAG, "BroadCastReceived : type=" + type);
         switch (type) {
             case PUSH:
                 Parcelable[] p = intent.getParcelableArrayExtra(Befrest.Util.KEY_MESSAGE_PASSED);

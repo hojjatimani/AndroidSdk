@@ -1,12 +1,12 @@
 /******************************************************************************
  * Copyright 2015-2016 Befrest
- * <p/>
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p/>
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -124,7 +124,7 @@ public final class PushService extends Service {
                     isBachReceiveMode = true;
                     BATCH_SIZE = Integer.valueOf(msg.data);
                     int batchTime = getBatchTime();
-                    BefLog.v(TAG, "BATCH Mode Started for : " + batchTime + "milliseconds");
+                    BefLog.v(TAG, "BATCH Mode Started for : " + batchTime + "ms");
                     handler.postDelayed(finishBatchMode, batchTime);
                     break;
                 case PONG:
@@ -136,7 +136,7 @@ public final class PushService extends Service {
         @Override
         public void onClose(int code, String reason) {
             BefLog.d(TAG, "Connection lost. Code: " + code + ", Reason: " + reason);
-            BefLog.i(TAG, "Befrest Connection Closed");
+            BefLog.i(TAG, "Befrest Connection Closed. Will Retry To Connect If Possible.");
             connecting = false;
             switch (code) {
                 case CLOSE_UNAUTHORIZED:
@@ -172,7 +172,7 @@ public final class PushService extends Service {
     private Runnable restart = new Runnable() {
         @Override
         public void run() {
-            BefLog.d(TAG, "Befrest Restart");
+            BefLog.d(TAG, "Befrest Connection Is Not Responding. Will Reconnect.");
             restartInProgress = false;
             mConnection.disconnect();
             connectIfNeeded();
@@ -185,7 +185,8 @@ public final class PushService extends Service {
             BefLog.d(TAG, "Befrest Retry");
             retryInProgress = false;
             mConnection.disconnect();
-            reconnectIfNeeded();
+//            reconnectIfNeeded();
+            connectIfNeeded();
         }
     };
 
@@ -308,22 +309,15 @@ public final class PushService extends Service {
         BefLog.v(TAG, "scheduleReconnect() retryInProgress, restartInProgress, hasNetworkConnection", retryInProgress, restartInProgress, hasNetworkConnection);
         if (retryInProgress || restartInProgress || !hasNetworkConnection)
             return; //a retry or restart is already in progress or network in unavailable
-        cancelFuturePing();
+        cancelALLPendingIntents();
         prevFailedConnectTries++;
         int interval = getNextReconnectInterval();
-        BefLog.d(TAG, "Befrest Reconnect Scheduled    interval : " + interval);
+        BefLog.d(TAG, "Befrest Will Retry To Connect In " + interval + "ms");
         handler.postDelayed(retry, getNextReconnectInterval());
         retryInProgress = true;
     }
 
     private void handleAthorizeProblem() {
-//        Befrest.Util.enableConnectivityChangeListener(this);
-//        boolean hasNetworkConnection = Befrest.Util.isConnectedToInternet(this);
-//        if (hasNetworkConnection) sendBefrestBroadcast(BefrestPushReceiver.UNAUTHORIZED);
-//        cancelALLPendingIntents();
-//        handler.postDelayed(retry, ASK_FOR_AUTH_INTERVAL);
-//        retryInProgress = true;
-
         BefLog.i(TAG, "Befrest On Authorize Problem!");
         Befrest.Util.enableConnectivityChangeListener(this);
         if (befrest.prevAuthProblems == 0) {
@@ -349,28 +343,15 @@ public final class PushService extends Service {
         }
     }
 
-    Runnable connectIfNeeded = new Runnable() {
-        @Override
-        public void run() {
-            connectIfNeededWithoutDelay();
-        }
-    };
+//    Runnable connectIfNeeded = new Runnable() {
+//        @Override
+//        public void run() {
+//            connectIfNeededWithoutDelay();
+//        }
+//    };
 
     private void connectIfNeeded() {
         BefLog.v(TAG, "connectIfNeeded()");
-//        if (shouldConnect())
-//            try {
-//                connecting = true;
-//                BefLog.i(TAG, "Befrest Is Connecting ...");
-//                mConnection.connect(befrest.getSubscribeUri(), wscHandler, befrest.getSubscribeHeaders());
-//            } catch (WebSocketException e) {
-//                BefLog.e(TAG, e);
-//            }
-        handler.postDelayed(connectIfNeeded, 1000);
-    }
-
-    private void connectIfNeededWithoutDelay() {
-        BefLog.v(TAG, "connectIfNeededWithoutDelay()");
         if (shouldConnect())
             try {
                 cancelALLPendingIntents();
@@ -380,7 +361,21 @@ public final class PushService extends Service {
             } catch (WebSocketException e) {
                 BefLog.e(TAG, e);
             }
+//        handler.postDelayed(connectIfNeeded, 1000);
     }
+
+//    private void connectIfNeededWithoutDelay() {
+//        BefLog.v(TAG, "connectIfNeededWithoutDelay()");
+//        if (shouldConnect())
+//            try {
+//                cancelALLPendingIntents();
+//                connecting = true;
+//                BefLog.i(TAG, "Befrest Is Connecting ...");
+//                mConnection.connect(befrest.getSubscribeUri(), wscHandler, befrest.getSubscribeHeaders());
+//            } catch (WebSocketException e) {
+//                BefLog.e(TAG, e);
+//            }
+//    }
 
     private boolean shouldConnect() {
         boolean isAleadyConnected = mConnection.isConnected();
@@ -391,31 +386,33 @@ public final class PushService extends Service {
     }
 
 
-    Runnable reconnectIfNeeded = new Runnable() {
-        @Override
-        public void run() {
-            reconnectIfNeededWithoutDelay();
-        }
-    };
+//    Runnable reconnectIfNeeded = new Runnable() {
+//        @Override
+//        public void run() {
+//            reconnectIfNeededWithoutDelay();
+//        }
+//    };
 
     private void reconnectIfNeeded() {
         BefLog.v(TAG, "reconnectIfNeeded()");
-//        if (shouldConnect()) {
-//            connecting = true;
-//            BefLog.i(TAG, "Befrest Is Reconnecting ...");
-//            mConnection.reconnect();
-//        }
-        handler.postDelayed(reconnectIfNeeded, 1000);
-    }
-
-    private void reconnectIfNeededWithoutDelay() {
-        BefLog.v(TAG, "reconnectIfNeededWithoutDelay()");
         if (shouldConnect()) {
+            cancelALLPendingIntents();
             connecting = true;
             BefLog.i(TAG, "Befrest Is Reconnecting ...");
             mConnection.reconnect();
         }
+//        handler.postDelayed(reconnectIfNeeded, 1000);
     }
+
+//    private void reconnectIfNeededWithoutDelay() {
+//        BefLog.v(TAG, "reconnectIfNeededWithoutDelay()");
+//        if (shouldConnect()) {
+//            cancelALLPendingIntents();
+//            connecting = true;
+//            BefLog.i(TAG, "Befrest Is Reconnecting ...");
+//            mConnection.reconnect();
+//        }
+//    }
 
     private void sendBefrestBroadcast(int type) {
         Intent intent = new Intent(BefrestPushReceiver.ACTION_BEFREST_PUSH);
@@ -456,7 +453,7 @@ public final class PushService extends Service {
         cancelFuturePing();
         cancelFutureRetry();
         cancelUpcommingRestart();
-        cancelDelayedConnectIfNeeded();
+//        cancelDelayedConnectIfNeeded();
     }
 
     private void cancelFuturePing() {
@@ -476,11 +473,11 @@ public final class PushService extends Service {
         restartInProgress = false;
     }
 
-    private void cancelDelayedConnectIfNeeded() {
-        BefLog.v(TAG, "cancelDelayedConnectIfNeeded()");
-        handler.removeCallbacks(connectIfNeeded);
-        handler.removeCallbacks(reconnectIfNeeded);
-    }
+//    private void cancelDelayedConnectIfNeeded() {
+//        BefLog.v(TAG, "cancelDelayedConnectIfNeeded()");
+//        handler.removeCallbacks(connectIfNeeded);
+//        handler.removeCallbacks(reconnectIfNeeded);
+//    }
 
     private int getNextReconnectInterval() {
         return retryInterval[prevFailedConnectTries < retryInterval.length ? prevFailedConnectTries : retryInterval.length - 1];

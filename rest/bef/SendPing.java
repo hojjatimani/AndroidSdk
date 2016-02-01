@@ -60,7 +60,7 @@ public class SendPing extends Thread {
                 BefLog.v(TAG, "pingSendStatus: " + conn.getResponseCode() + " " + conn.getResponseMessage());
                 conn.disconnect();
             } catch (Exception ex) {
-                BefLog.e(TAG, ex);
+                BefLog.w(TAG, "Befrest Had Problem In Sending A Ping. :: " + ex.getMessage());
             }
     }
 }
