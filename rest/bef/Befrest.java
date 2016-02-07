@@ -207,6 +207,7 @@ public final class Befrest {
     public void start() {
         if (uId < 0 || chId == null || chId.length() < 1)
             throw new IllegalStateException("uId and chId are not properly defined!");
+        legalStop = true;
         context.stopService(new Intent(context, PushService.class)); // stop service if is running with old credentials
         clearTempData();
         context.startService(new Intent(context, PushService.class).putExtra(PushService.CONNECT, true));
