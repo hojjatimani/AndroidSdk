@@ -1,12 +1,12 @@
 /******************************************************************************
  * Copyright 2015-2016 Befrest
- * <p>
+ * <p/>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p>
+ * <p/>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,15 +20,18 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
-import android.util.Log;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;
-import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.channels.SocketChannel;
 import java.util.List;
+
+import javax.net.ssl.HandshakeCompletedEvent;
+import javax.net.ssl.HandshakeCompletedListener;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
 
 import rest.bef.BefLog;
 
@@ -42,9 +45,8 @@ public class WebSocketConnection implements WebSocket {
     protected HandlerThread mWriterThread;
     protected WebSocketConnector connector;
 
-    protected SocketChannel mTransportChannel;
+    protected Socket mTransportChannel;
 
-    private URI mWsUri;
     private String mWsScheme;
     private String mWsHost;
     private int mWsPort;
@@ -52,20 +54,15 @@ public class WebSocketConnection implements WebSocket {
     private String mWsQuery;
     private String[] mWsSubprotocols;
     private List<NameValuePair> mWsHeaders;
-
     private WebSocket.ConnectionHandler mWsHandler;
-
     protected WebSocketOptions mOptions;
-
-    private boolean mActive;
-    private boolean mPrevConnected;
-    private boolean disconnected;
+    private boolean connected;
 
     private Runnable disconnectIfHandshakeTimeOut = new Runnable() {
         @Override
         public void run() {
             BefLog.v(TAG, "Handshake time out! ");
-            failConnection(WebSocketConnectionHandler.CLOSE_HANDSHAKE_TIME_OUT, "Server Handshake Time Out.");
+            disconnectAndNotify(WebSocketConnectionHandler.CLOSE_HANDSHAKE_TIME_OUT, "Server Handshake Time Out.");
         }
     };
     Handler handler = new Handler();
@@ -75,44 +72,49 @@ public class WebSocketConnection implements WebSocket {
      */
     private class WebSocketConnector extends Thread {
 
+        protected Socket createSocket() throws IOException {
+            Socket soc;
+            if (mWsScheme.equals("wss")) {
+                SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+                SSLSocket secSoc = (SSLSocket) factory.createSocket(mWsHost, mWsPort);
+                secSoc.setUseClientMode(true);
+                secSoc.addHandshakeCompletedListener(new HandshakeCompletedListener() {
+                    public void handshakeCompleted(HandshakeCompletedEvent event) {
+                        BefLog.d(TAG, "ssl handshake completed");
+                    }
+                });
+                soc = secSoc;
+            } else
+                soc = new Socket(mWsHost, mWsPort);
+            return soc;
+        }
+
         public void run() {
+            BefLog.v(TAG, "connector ------------------------START-------------------");
             Thread.currentThread().setName("WebSocketConnector");
 
             //HOJJAT: wait a bit
             try {
-                Thread.sleep(700);
+                Thread.sleep(500);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-			/*
+            /*
              * connect TCP socket
 			 */
             try {
-                mTransportChannel = SocketChannel.open();
-
-                // the following will block until connection was established or
-                // an error occurred!
-                mTransportChannel.socket().connect(
-                        new InetSocketAddress(mWsHost, mWsPort),
-                        mOptions.getSocketConnectTimeout());
-
-                // before doing any data transfer on the socket, set socket
-                // options
-                mTransportChannel.socket().setSoTimeout(
-                        mOptions.getSocketReceiveTimeout());
-                mTransportChannel.socket().setTcpNoDelay(
-                        mOptions.getTcpNoDelay());
-
+                mTransportChannel = createSocket();
             } catch (IOException e) {
+                BefLog.e(TAG, e);
                 if (mWsHandler != null)
                     mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT,
                             e.getMessage());
                 else
-                    Log.w(TAG, "Befrest Warning! mWsHandler is null where it is expected to be valid!");
+                    BefLog.w(TAG, "Befrest Warning! mWsHandler is null where it is expected to be valid!");
                 return;
             }
 
-            if (mTransportChannel.isConnected()) {
+            if (isConnected()) {
 
                 try {
 
@@ -133,35 +135,34 @@ public class WebSocketConnection implements WebSocket {
 
                     handler.postDelayed(disconnectIfHandshakeTimeOut, 7 * 1000);
 
-                    mPrevConnected = true;
-                    disconnected = false;
-
                 } catch (Exception e) {
+                    BefLog.e(TAG, e);
                     if (mWsHandler != null)
                         mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_INTERNAL_ERROR,
                                 e.getMessage());
                     else
-                        Log.w(TAG, "Befrest Warning! mWsHandler is null where it is expected to be valid!");
+                        BefLog.w(TAG, "Befrest Warning! mWsHandler is null where it is expected to be valid!");
                     return;
                 }
             } else {
-                mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT,
-                        "Could not connect to WebSocket server");
+                BefLog.e(TAG, "isConnected returnd false");
+                if (mWsHandler != null)
+                    mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT,
+                            "Could not connect to WebSocket server");
+                else
+                    BefLog.w(TAG, "Befrest Warning! mWsHandler is null where it is expected to be valid!");
                 return;
             }
+            connected = true;
             connector = null;
+            BefLog.v(TAG, "mTransportChannel:" + mTransportChannel.toString() + System.identityHashCode(mTransportChannel));
+            BefLog.v(TAG, "connector   --------------------------END--------------------");
         }
-
     }
 
     public WebSocketConnection() {
         BefLog.v(TAG, "created");
-
-        mMasterHandler = new MasterHandler(new WeakReference<WebSocketConnection>(this));
-
-        // set initial values
-        mActive = false;
-        mPrevConnected = false;
+        mMasterHandler = new MasterHandler(new WeakReference<>(this));
     }
 
 
@@ -179,53 +180,29 @@ public class WebSocketConnection implements WebSocket {
         mWriter.forward(new WebSocketMessage.BinaryMessage(payload));
     }
 
-
-    public boolean isConnected() {
-        return mTransportChannel != null && mTransportChannel.isConnected();
+    public void sendPing(byte[] payload) {
+        if (mWriter != null)
+            mWriter.forward(new WebSocketMessage.Ping(payload));
+        else BefLog.w(TAG, "could not send ping! mWriter is null!");
     }
 
 
-    private void failConnection(int code, String reason) {
-        BefLog.v(TAG, "fail connection [code = " + code + ", reason = " + reason);
-        if (mReader != null) {
-            mReader.quit();
-            try {
-                mReader.join();
-            } catch (InterruptedException e) {
-                BefLog.e(TAG, e);
-            }
-            mReader = null;
-        } else {
-            BefLog.v(TAG, "mReader already NULL");
-        }
-
-        if (mWriter != null) {
-            mWriter.forward(new WebSocketMessage.Quit());
-            try {
-                mWriterThread.join();
-            } catch (InterruptedException e) {
-                BefLog.e(TAG, e);
-            }
-            mWriter = null;
-            mWriterThread = null;
-        } else {
-            BefLog.v(TAG, "mWriter already NULL");
-        }
-
+    public boolean isConnected() {
+        BefLog.v(TAG, "isConnected ******Start*****");
         if (mTransportChannel != null) {
-            try {
-                mTransportChannel.close();
-            } catch (IOException e) {
-                BefLog.e(TAG, e);
-            }
-            mTransportChannel = null;
-        } else {
-            BefLog.v(TAG, "mTransportChannel already NULL");
+            BefLog.v(TAG, "mTransportChannel:" + mTransportChannel.toString() + System.identityHashCode(mTransportChannel));
+            BefLog.v(TAG, "mTransportChannel.isConnected() .isClosed" + mTransportChannel.isConnected() + "," + mTransportChannel.isClosed());
         }
+        BefLog.v(TAG, "isConnected ******End*****");
+        return mTransportChannel != null && mTransportChannel.isConnected() && !mTransportChannel.isClosed();
+    }
 
+
+    private void disconnectAndNotify(int code, String reason) {
+        BefLog.v(TAG, "fail connection [code = " + code + ", reason = " + reason);
+        closeConnection();
         mWsHandler.onClose(code, reason);
-
-        BefLog.v(TAG, "worker threads stopped");
+        mWsHandler = null;
     }
 
 
@@ -247,21 +224,21 @@ public class WebSocketConnection implements WebSocket {
 
         // don't connect if already connected .. user needs to disconnect first
         //
-        if (mTransportChannel != null && mTransportChannel.isConnected()) {
+        if (isConnected()) {
             throw new WebSocketException("already connected");
         }
 
         // parse WebSockets URI
         //
         try {
-            mWsUri = new URI(wsUri);
+            URI mWsUri = new URI(wsUri);
 
             if (!mWsUri.getScheme().equals("ws") && !mWsUri.getScheme().equals("wss")) {
                 throw new WebSocketException("unsupported scheme for WebSockets URI");
             }
 
             if (mWsUri.getScheme().equals("wss")) {
-                throw new WebSocketException("secure WebSockets not implemented");
+                BefLog.v(TAG, "WebSocket Url is Secured With SSL!");
             }
 
             mWsScheme = mWsUri.getScheme();
@@ -306,8 +283,6 @@ public class WebSocketConnection implements WebSocket {
         // make copy of options!
         mOptions = new WebSocketOptions(options);
 
-        // set connection active
-        mActive = true;
 
         // use asynch connector on short-lived background thread
         connector = new WebSocketConnector();
@@ -316,10 +291,14 @@ public class WebSocketConnection implements WebSocket {
 
 
     public void disconnect() {
-        mActive = false;
-        mPrevConnected = false;
-        disconnected = true;
-        //it must be here
+        closeConnection();
+        //mWsHandler must be set to null
+        mWsHandler = null;
+        BefLog.v(TAG, "disconnected");
+    }
+
+    private void closeConnection() {
+        connected = false;
         if (connector != null) {
             try {
                 connector.join();
@@ -327,95 +306,60 @@ public class WebSocketConnection implements WebSocket {
                 e.printStackTrace();
             }
             BefLog.v(TAG, "connector joind");
-            connector = null;
         }
         handler.removeCallbacks(disconnectIfHandshakeTimeOut); // it must be here!
         if (mReader != null) {
             mReader.quit();
-            try {
-                mReader.join();
-            } catch (InterruptedException e) {
-                BefLog.e(TAG, e);
-            }
-            mReader = null;
-        } else {
-            BefLog.v(TAG, "mReader already NULL");
-        }
-
+            BefLog.v(TAG, "mReader.quit();");
+        } else BefLog.v(TAG, "mReader was null (mReader.quit();)");
         if (mWriter != null) {
             mWriter.forward(new WebSocketMessage.Close());
             mWriter.forward(new WebSocketMessage.Quit());
-            try {
+            BefLog.v(TAG, "mWriter.forward(new WebSocketMessage.Close() , .Quit());");
+        } else
+            BefLog.v(TAG, "mWriter was null (mWriter.forward(new WebSocketMessage.Close() , .Quit());)");
+        try {
+            if (mWriterThread != null) {
                 mWriterThread.join();
-            } catch (InterruptedException e) {
-                BefLog.e(TAG, e);
+                BefLog.v(TAG, "mWriterThread joined");
+            } else {
+                BefLog.d(TAG, "mWriter was null (join)");
             }
-            mWriter = null;
-            mWriterThread = null;
-        } else {
-            BefLog.v(TAG, "mWriter already NULL");
-        }
-
-        if (mTransportChannel != null) {
-            try {
-                mTransportChannel.close();
-            } catch (IOException e) {
-                BefLog.e(TAG, e);
+            SocketCloser socketCloser = new SocketCloser();
+            socketCloser.start();
+            socketCloser.join();
+            if (mReader != null) {
+                mReader.join();
+                BefLog.v(TAG, "mReader joined");
+            } else {
+                BefLog.d(TAG, "mReader was null (join)");
             }
-            mTransportChannel = null;
-        } else {
-            BefLog.v(TAG, "mTransportChannel already NULL");
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
-        BefLog.v(TAG, "disconnected");
+        mReader = null;
+        mWriter = null;
+        mWriterThread = null;
+        mTransportChannel = null;
+        connector = null;
     }
 
-    /**
-     * Reconnect to the server with the latest options
-     *
-     * @return true if reconnection performed
-     */
-    public boolean reconnect() {
-        if (!isConnected() && (mWsUri != null)) {
-            //HOJJAT:
-            //this is dangeruous!!! because it is creating a connector thread without
-            //setting it to connector. so this thread might not be joined when disconnecting
-            new WebSocketConnector().start();
-            return true;
-        }
-        return false;
-    }
+    class SocketCloser extends Thread {
 
-    /**
-     * Perform reconnection
-     *
-     * @return true if reconnection was scheduled
-     */
-    protected boolean scheduleReconnect() {
-        /**
-         * Reconnect only if:
-         *  - connection active (connected but not disconnected)
-         *  - has previous success connections
-         *  - reconnect interval is set
-         */
-        int interval = mOptions.getReconnectInterval();
-        boolean need = mActive && mPrevConnected && (interval > 0);
-        if (need) {
-            BefLog.v(TAG, "Reconnection scheduled");
-            mMasterHandler.postDelayed(new Runnable() {
-
-                public void run() {
-                    BefLog.d(TAG, "Reconnecting...");
-                    reconnect();
+        @Override
+        public void run() {
+            Thread.currentThread().setName("SocketCloser");
+            if (mTransportChannel != null) {
+                try {
+                    mTransportChannel.close();
+                } catch (IOException e) {
+                    BefLog.e(TAG, e);
                 }
-            }, interval);
+            } else {
+                BefLog.v(TAG, "mTransportChannel already NULL");
+            }
         }
-        return need;
     }
-
-
-    protected void processAppMessage(Object message) {
-    }
-
 
     /**
      * Create WebSockets background writer.
@@ -433,7 +377,8 @@ public class WebSocketConnection implements WebSocket {
      * Create WebSockets background reader.
      */
     protected void createReader() {
-
+        if (mReader != null)
+            BefLog.e(TAG, "createReader    -    mReader != null");
         mReader = new WebSocketReader(mMasterHandler, mTransportChannel, mOptions, "WebSocketReader");
         mReader.start();
         BefLog.v(TAG, "WS reader created and started");
@@ -492,10 +437,13 @@ public class WebSocketConnection implements WebSocket {
 
             } else if (msg.obj instanceof WebSocketMessage.Pong) {
 
-                @SuppressWarnings("unused")
                 WebSocketMessage.Pong pong = (WebSocketMessage.Pong) msg.obj;
 
-                BefLog.v(TAG, "WebSockets Pong received");
+                if (wsConnection.mWsHandler != null) {
+                    wsConnection.mWsHandler.onPong(pong.mPayload);
+                } else {
+                    BefLog.w(TAG, "could not call onPong() .. handler already NULL");
+                }
 
             } else if (msg.obj instanceof WebSocketMessage.Close) {
 
@@ -504,8 +452,11 @@ public class WebSocketConnection implements WebSocket {
                 BefLog.v(TAG, "WebSockets Close received (" + close.mCode + " - " + close.mReason + ")");
 
                 final int closeCode = (close.mCode == 1000) ? ConnectionHandler.CLOSE_NORMAL : ConnectionHandler.CLOSE_CONNECTION_LOST;
-                wsConnection.disconnect();
-                wsConnection.mWsHandler.onClose(closeCode, close.mReason);
+                if (wsConnection.mWsHandler != null) {
+                    wsConnection.disconnectAndNotify(closeCode, close.mReason);
+                } else {
+                    BefLog.w(TAG, "could not call onClose() .. handler already NULL");
+                }
 
             } else if (msg.obj instanceof WebSocketMessage.ServerHandshake) {
 
@@ -515,7 +466,7 @@ public class WebSocketConnection implements WebSocket {
 
                 if (serverHandshake.mSuccess) {
                     if (wsConnection.mWsHandler != null) {
-                        if (!wsConnection.disconnected)
+                        if (wsConnection.connected)
                             wsConnection.mWsHandler.onOpen();
                     } else {
                         BefLog.w(TAG, "could not call onOpen() .. handler already NULL");
@@ -528,18 +479,35 @@ public class WebSocketConnection implements WebSocket {
 
                 @SuppressWarnings("unused")
                 WebSocketMessage.ConnectionLost connnectionLost = (WebSocketMessage.ConnectionLost) msg.obj;
-                wsConnection.failConnection(WebSocketConnectionHandler.CLOSE_CONNECTION_LOST, "WebSockets connection lost");
+                if (wsConnection.mWsHandler != null) {
+                    BefLog.d(TAG, "failConnectionWillBeCalled");
+                    wsConnection.disconnectAndNotify(WebSocketConnectionHandler.CLOSE_CONNECTION_LOST, "WebSockets connection lost");
+                } else {
+                    BefLog.w(TAG, "could not call disconnectAndNotify() .. handler already NULL");
+                }
+
 
             } else if (msg.obj instanceof WebSocketMessage.ProtocolViolation) {
 
                 @SuppressWarnings("unused")
                 WebSocketMessage.ProtocolViolation protocolViolation = (WebSocketMessage.ProtocolViolation) msg.obj;
-                wsConnection.failConnection(WebSocketConnectionHandler.CLOSE_PROTOCOL_ERROR, "WebSockets protocol violation");
+                if (wsConnection.mWsHandler != null) {
+                    BefLog.d(TAG, "failConnectionWillBeCalled");
+                    wsConnection.disconnectAndNotify(WebSocketConnectionHandler.CLOSE_PROTOCOL_ERROR, "WebSockets protocol violation");
+                } else {
+                    BefLog.w(TAG, "could not call disconnectAndNotify() .. handler already NULL");
+                }
 
             } else if (msg.obj instanceof WebSocketMessage.Error) {
 
                 WebSocketMessage.Error error = (WebSocketMessage.Error) msg.obj;
-                wsConnection.failConnection(WebSocketConnectionHandler.CLOSE_INTERNAL_ERROR, "WebSockets internal error (" + error.mException.toString() + ")");
+                BefLog.e(TAG, error.mException);
+                if (wsConnection.mWsHandler != null) {
+                    BefLog.d(TAG, "failConnectionWillBeCalled");
+                    wsConnection.disconnectAndNotify(WebSocketConnectionHandler.CLOSE_INTERNAL_ERROR, "WebSockets internal error (" + error.mException.toString() + ")");
+                } else {
+                    BefLog.w(TAG, "could not call disconnectAndNotify() .. handler already NULL");
+                }
 
             } else if (msg.obj instanceof WebSocketMessage.ServerError) {
 
@@ -547,10 +515,13 @@ public class WebSocketConnection implements WebSocket {
                 int errCode = WebSocketConnectionHandler.CLOSE_SERVER_ERROR;
                 if (error.mStatusCode == 401)
                     errCode = WebSocketConnectionHandler.CLOSE_UNAUTHORIZED; //hojjat
-                wsConnection.failConnection(errCode, "Server error " + error.mStatusCode + " (" + error.mStatusMessage + ")");
+                if (wsConnection.mWsHandler != null) {
+                    BefLog.d(TAG, "failConnectionWillBeCalled");
+                    wsConnection.disconnectAndNotify(errCode, "Server error " + error.mStatusCode + " (" + error.mStatusMessage + ")");
+                } else {
+                    BefLog.w(TAG, "could not call disconnectAndNotify() .. handler already NULL");
+                }
 
-            } else {
-                wsConnection.processAppMessage(msg.obj);
             }
         }
     }

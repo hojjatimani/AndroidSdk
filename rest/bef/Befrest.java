@@ -56,7 +56,7 @@ public final class Befrest {
         topics = prefs.getString(PREF_TOPICS, "");
         logLevel = prefs.getInt(PREF_LOG_LEVEL, LOG_LEVEL_DEFAULT);
         checkInSleep = prefs.getBoolean(PREF_CHECK_IN_DEEP_SLEEP, false);
-        isServiceStarted = prefs.getBoolean(PREF_IS_SERVICE_STARTED, false);
+        isBefrestStarted = prefs.getBoolean(PREF_IS_SERVICE_STARTED, false);
     }
 
     public static Befrest getInstance(Context context) {
@@ -75,14 +75,11 @@ public final class Befrest {
     String auth;
     int logLevel;
     boolean checkInSleep;
-    boolean isServiceStarted;
+    boolean isBefrestStarted;
     String topics;
 
     boolean refreshIsRequested = false;
     long lastAcceptedRefreshRequestTime = 0;
-
-    //    boolean somethingChanged;
-    volatile boolean legalStop = false;
 
     private static final int[] AuthProblemBroadcastDelay = {0, 5 * 1000, 10 * 1000, 25 * 1000, 50 * 1000};
     int prevAuthProblems = 0;
@@ -205,14 +202,14 @@ public final class Befrest {
      * @throws IllegalStateException if be called without a prior call to init()
      */
     public void start() {
+        Log.i(TAG, "starting befrest");
         if (uId < 0 || chId == null || chId.length() < 1)
             throw new IllegalStateException("uId and chId are not properly defined!");
-        legalStop = true;
         context.stopService(new Intent(context, PushService.class)); // stop service if is running with old credentials
         clearTempData();
         context.startService(new Intent(context, PushService.class).putExtra(PushService.CONNECT, true));
-        setServiceStarted(true);
-        Util.enableConnectivityChangeListenerIfNeeded(context);
+        setBefrestStarted(true);
+        Util.enableConnectivityChangeListener(context);
         if (checkInSleep) scheduleWakeUP();
     }
 
@@ -221,12 +218,10 @@ public final class Befrest {
      * You can call start to run the service later.
      */
     public void stop() {
-        legalStop = true;
         context.stopService(new Intent(context, PushService.class));
         cancelWakeUP();
-        cancelStartServiceAlarm();
         Util.disableConnectivityChangeListener(context);
-        setServiceStarted(false);
+        setBefrestStarted(false);
         BefLog.i(TAG, "Befrest Service Stopped.");
     }
 
@@ -284,7 +279,7 @@ public final class Befrest {
     public Befrest enableCheckInSleep() {
         checkInSleep = true;
         context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putBoolean(PREF_CHECK_IN_DEEP_SLEEP, true).commit();
-        if (isServiceStarted) scheduleWakeUP();
+        if (isBefrestStarted) scheduleWakeUP();
         return this;
     }
 
@@ -302,10 +297,9 @@ public final class Befrest {
      * @return true if a request was accepted, false otherwise.
      */
     public boolean refresh() {
-        if (!Util.isConnectedToInternet(context) || !isServiceStarted)
+        if (!Util.isConnectedToInternet(context) || !isBefrestStarted)
             return false;
         BefLog.i(TAG, "Befrest Is Refreshing ...");
-        Util.enableConnectivityChangeListenerIfNeeded(context);
         if (refreshIsRequested && (System.currentTimeMillis() - lastAcceptedRefreshRequestTime) < 10 * 1000)
             return true;
         refreshIsRequested = true;
@@ -362,9 +356,9 @@ public final class Befrest {
         clearTempData();
     }
 
-    private void setServiceStarted(boolean b) {
-        isServiceStarted = b;
-        context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putBoolean(PREF_IS_SERVICE_STARTED, isServiceStarted).commit();
+    private void setBefrestStarted(boolean b) {
+        isBefrestStarted = b;
+        context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putBoolean(PREF_IS_SERVICE_STARTED, isBefrestStarted).commit();
     }
 
     private static void saveToPrefs(Context context, long uId, String AUTH, String chId) {
@@ -404,7 +398,9 @@ public final class Befrest {
 
     String getSubscribeUri() {
         if (subscribeUrl == null)
-            subscribeUrl = String.format(Locale.US, "ws://gw.bef.rest:8000/xapi/%d/subscribe/%d/%s/%d", Util.API_VERSION, uId, chId, Util.SDK_VERSION);
+            subscribeUrl = String.format(Locale.US, "wss://gw.bef.rest:8443/xapi/%d/subscribe/%d/%s/%d", Util.API_VERSION, uId, chId, Util.SDK_VERSION);
+//            subscribeUrl = String.format(Locale.US, "ws://gw.bef.rest:8000/xapi/%d/subscribe/%d/%s/%d", Util.API_VERSION, uId, chId, Util.SDK_VERSION);
+        Log.d(TAG, "getSubscribeUri: " + subscribeUrl);
         return subscribeUrl;
     }
 
@@ -434,20 +430,10 @@ public final class Befrest {
 
     void setStartServiceAlarm() {
         AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        Intent intent = new Intent(context, PushService.class).putExtra(PushService.START, true);
+        Intent intent = new Intent(context, PushService.class).putExtra(PushService.SERVICE_STOPPED, true);
         PendingIntent pi = PendingIntent.getService(context, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-        alarmMgr.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + PushService.startServiceAgainDelay, pi);
-        BefLog.d(TAG, "Befrest Scheduled To Start Service In " + PushService.startServiceAgainDelay + "ms");
-    }
-
-    void cancelStartServiceAlarm() {
-        AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        Intent intent = new Intent(context, PushService.class).putExtra(PushService.START, true);
-        PendingIntent pi = PendingIntent.getService(context, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-        alarmMgr.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + PushService.startServiceAgainDelay, pi);
-        alarmMgr.cancel(pi);
-        pi.cancel();
-        BefLog.d(TAG, "Befrest Wont Start Service In Future.");
+        alarmMgr.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + PushService.START_SERVICE_AFTER_ILLEGAL_STOP_DELAY, pi);
+        BefLog.d(TAG, "Befrest Scheduled To Start Service In " + PushService.START_SERVICE_AFTER_ILLEGAL_STOP_DELAY + "ms");
     }
 
     int getSendOnAuthorizeBroadcastDelay() {
@@ -459,6 +445,7 @@ public final class Befrest {
         private static final String BROADCAST_SENDING_PERMISSION_POSTFIX = ".permission.PUSH_SERVICE";
         private static final int API_VERSION = 1;
         private static final int SDK_VERSION = 1;
+        private static final String SDK_VERSION_NAME = "1.0.2-test";
         static long lastScreenOnTime;
 
         private static WifiManager.WifiLock wifiLock;
@@ -573,17 +560,6 @@ public final class Befrest {
             return context.getApplicationContext().getPackageName() + BROADCAST_SENDING_PERMISSION_POSTFIX;
         }
 
-        static void enableConnectivityChangeListenerIfNeeded(Context context) {
-            ComponentName receiver = new ComponentName(context, BefrestConnectivityChangeReceiver.class);
-            PackageManager pm = context.getPackageManager();
-            boolean isConnectedToInternet = isConnectedToInternet(context);
-            boolean isConnectivityChangeListenerDisabled = pm.getComponentEnabledSetting(receiver) == PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
-            boolean isServiceStarted = Befrest.getInstance(context).isServiceStarted;
-            BefLog.v(TAG, "isConnectedToInternet, isConnectivityChangeListenerDisabled, isServiceStarted", isConnectedToInternet, isConnectivityChangeListenerDisabled, isServiceStarted);
-            if (!isConnectedToInternet && isConnectivityChangeListenerDisabled && isServiceStarted)
-                enableConnectivityChangeListener(context);
-        }
-
         static void disableConnectivityChangeListener(Context context) {
             ComponentName receiver = new ComponentName(context, BefrestConnectivityChangeReceiver.class);
             PackageManager pm = context.getPackageManager();
@@ -619,6 +595,10 @@ public final class Befrest {
             }
             PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
             return pm.isScreenOn();
+        }
+
+        static String getSdkVersionName(){
+            return SDK_VERSION_NAME;
         }
     }
 }

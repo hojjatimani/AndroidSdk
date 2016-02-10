@@ -18,13 +18,17 @@ package rest.bef.connectivity;
 
 import android.os.Handler;
 import android.os.Message;
+import android.util.Log;
 import android.util.Pair;
+
 import java.io.UnsupportedEncodingException;
+import java.net.Socket;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
-import java.nio.channels.SocketChannel;
 import java.util.HashMap;
 import java.util.Map;
+
+import javax.net.ssl.SSLException;
 
 import rest.bef.BefLog;
 
@@ -41,7 +45,7 @@ public class WebSocketReader extends Thread {
     private static final String TAG = WebSocketReader.class.getName();
 
     private final Handler mMaster;
-    private final SocketChannel mSocket;
+    private final Socket mSocket;
     private final WebSocketOptions mOptions;
 
     private final ByteBuffer mFrameBuffer;
@@ -82,10 +86,10 @@ public class WebSocketReader extends Thread {
     /**
      * Create new WebSockets background reader.
      *
-     * @param master    The message handler of master (foreground thread).
-     * @param socket    The socket channel created on foreground thread.
+     * @param master The message handler of master (foreground thread).
+     * @param socket The socket channel created on foreground thread.
      */
-    public WebSocketReader(Handler master, SocketChannel socket, WebSocketOptions options, String threadName) {
+    public WebSocketReader(Handler master, Socket socket, WebSocketOptions options, String threadName) {
 
         super(threadName);
 
@@ -116,7 +120,7 @@ public class WebSocketReader extends Thread {
      * Notify the master (foreground thread) of WebSockets message received
      * and unwrapped.
      *
-     * @param message       Message to send to master.
+     * @param message Message to send to master.
      */
     protected void notify(Object message) {
 
@@ -130,7 +134,6 @@ public class WebSocketReader extends Thread {
      * Process incoming WebSockets data (after handshake).
      */
     private boolean processData() throws Exception {
-
         // outside frame?
         if (mFrameHeader == null) {
 
@@ -257,12 +260,10 @@ public class WebSocketReader extends Thread {
                     return mFrameHeader.mPayloadLen == 0 || mFrameBuffer.position() >= mFrameHeader.mTotalLen;
 
                 } else {
-
                     // need more data
                     return false;
                 }
             } else {
-
                 // need more data
                 return false;
             }
@@ -425,7 +426,7 @@ public class WebSocketReader extends Thread {
     /**
      * WebSockets handshake reply from server received, default notifies master.
      *
-     * @param success    Success handshake flag
+     * @param success Success handshake flag
      */
     protected void onHandshake(boolean success) {
 
@@ -445,7 +446,7 @@ public class WebSocketReader extends Thread {
     /**
      * WebSockets ping received, default notifies master.
      *
-     * @param payload    Ping payload or null.
+     * @param payload Ping payload or null.
      */
     protected void onPing(byte[] payload) {
 
@@ -456,7 +457,7 @@ public class WebSocketReader extends Thread {
     /**
      * WebSockets pong received, default notifies master.
      *
-     * @param payload    Pong payload or null.
+     * @param payload Pong payload or null.
      */
     protected void onPong(byte[] payload) {
 
@@ -469,8 +470,8 @@ public class WebSocketReader extends Thread {
      * This will only be called when the option receiveTextMessagesRaw
      * HAS NOT been set.
      *
-     * @param payload    Text message payload as Java String decoded
-     *                   from raw UTF-8 payload or null (empty payload).
+     * @param payload Text message payload as Java String decoded
+     *                from raw UTF-8 payload or null (empty payload).
      */
     protected void onTextMessage(String payload) {
         BefLog.v(TAG, "onTextMessage()");
@@ -483,8 +484,8 @@ public class WebSocketReader extends Thread {
      * This will only be called when the option receiveTextMessagesRaw
      * HAS been set.
      *
-     * @param payload    Text message payload as raw UTF-8 octets or
-     *                   null (empty payload).
+     * @param payload Text message payload as raw UTF-8 octets or
+     *                null (empty payload).
      */
     protected void onRawTextMessage(byte[] payload) {
 
@@ -495,7 +496,7 @@ public class WebSocketReader extends Thread {
     /**
      * WebSockets binary message received, default notifies master.
      *
-     * @param payload    Binary message payload or null (empty payload).
+     * @param payload Binary message payload or null (empty payload).
      */
     protected void onBinaryMessage(byte[] payload) {
 
@@ -617,15 +618,12 @@ public class WebSocketReader extends Thread {
     private boolean consumeData() throws Exception {
 
         if (mState == STATE_OPEN || mState == STATE_CLOSING) {
-
             return processData();
 
         } else if (mState == STATE_CONNECTING) {
-
             return processHandshake();
 
         } else if (mState == STATE_CLOSED) {
-
             return false;
 
         } else {
@@ -647,13 +645,15 @@ public class WebSocketReader extends Thread {
         try {
 
             mFrameBuffer.clear();
+            byte readbuff[] = new byte[mFrameBuffer.capacity()];
             do {
                 // blocking read on socket
-                int len = mSocket.read(mFrameBuffer);
+                int len = mSocket.getInputStream().read(readbuff, 0, readbuff.length);
+                BefLog.v(TAG, "length : " + len);
                 if (len > 0) {
+                    mFrameBuffer.put(readbuff, 0, len);
                     // process buffered data
-                    while (consumeData()) {
-                    }
+                    while (consumeData()) ;
                 } else if (mState == STATE_CLOSED) {
                     mStopped = true;
                 } else if (len < 0) {
@@ -674,21 +674,22 @@ public class WebSocketReader extends Thread {
 
         } catch (SocketException e) {
 
-           BefLog.v(TAG, "run() : SocketException (" + e.toString() + ")");
+            BefLog.v(TAG, "run() : SocketException (" + e.toString() + ")");
 
             // wrap the exception and notify master
             notify(new WebSocketMessage.ConnectionLost());
-            ;
 
+        } catch (SSLException e) {
+            BefLog.v(TAG, "run() : SSLException (" + e.toString() + ")");
+
+            // wrap the exception and notify master
+            notify(new WebSocketMessage.ConnectionLost());
         } catch (Exception e) {
-
-            BefLog.v(TAG, "run() : Exception (" + e.toString() + ")");
-
+            Log.i(TAG, "exeption cath shod to reader");
             // wrap the exception and notify master
             notify(new WebSocketMessage.Error(e));
 
         } finally {
-
             mStopped = true;
         }
         BefLog.v(TAG, "ended");

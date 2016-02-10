@@ -32,8 +32,7 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
     static final int CONNECTION_REFRESHED = 2;
     static final int BEFREST_CONNECTED = 3;
     static final String BROADCAST_TYPE = "BROADCAST_TYPE";
-    static final String ACTION_BEFREST_PUSH = "rest.bef.broadcasts.ACTION_BEFREST_PUSH";
-
+    static final String ACTION_BEFREST_PUSH = "ACTION_BEFREST_PUSH";
     private static final String TAG = "BefrestPushReceiver";
 
     @Override

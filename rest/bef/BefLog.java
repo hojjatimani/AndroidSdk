@@ -1,12 +1,12 @@
 /******************************************************************************
  * Copyright 2015-2016 Befrest
- * <p>
+ * <p/>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p>
+ * <p/>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -31,7 +31,7 @@ import java.util.Locale;
 public final class BefLog {
     private static final String TAG = "BefLog";
     private static final boolean LogToFile = true;
-    private static final String LogsDir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/BefrestLogs";
+    private static final String LogsDir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/BefrestLogs_" + Befrest.Util.getSdkVersionName();
     private OutputStreamWriter streamWriter = null;
     private SimpleDateFormat dateFormat;
     private FileLogThread logQueue = null;
@@ -40,7 +40,7 @@ public final class BefLog {
 
 
     private static int getLogLevel() {
-        return  Befrest.getLogLevel();
+        return Befrest.getLogLevel();
     }
 
     private static volatile BefLog Instance = null;
@@ -85,8 +85,8 @@ public final class BefLog {
     }
 
     public static void e(final String tag, final String message, final Throwable exception) {
-        if (getLogLevel() > Befrest.LOG_LEVEL_ERROR) return;
-        Log.e(tag, message, exception);
+        if (!(getLogLevel() > Befrest.LOG_LEVEL_ERROR))
+            Log.e(tag, message, exception);
         if (!LogToFile) return;
         final int Tid = Process.myTid();
         final long time = System.currentTimeMillis();
@@ -107,7 +107,7 @@ public final class BefLog {
     }
 
     public static void e(final String tag, final String message) {
-        if (getLogLevel() > Befrest.LOG_LEVEL_ERROR) return;
+        if (!(getLogLevel() > Befrest.LOG_LEVEL_ERROR))
         Log.e(tag, message);
         if (!LogToFile) return;
         final int Tid = Process.myTid();
@@ -128,7 +128,7 @@ public final class BefLog {
     }
 
     public static void e(final String tag, final Throwable e) {
-        if (getLogLevel() > Befrest.LOG_LEVEL_ERROR) return;
+        if (!(getLogLevel() > Befrest.LOG_LEVEL_ERROR))
         e.printStackTrace();
         if (!LogToFile) return;
         final int Tid = Process.myTid();
@@ -155,7 +155,7 @@ public final class BefLog {
     }
 
     public static void d(final String tag, final String message) {
-        if (getLogLevel() > Befrest.LOG_LEVEL_DEBUG) return;
+        if (!(getLogLevel() > Befrest.LOG_LEVEL_DEBUG))
         Log.d(tag, message);
         if (!LogToFile) return;
         final int Tid = Process.myTid();
@@ -176,7 +176,7 @@ public final class BefLog {
     }
 
     public static void i(final String tag, final String message) {
-        if (getLogLevel() > Befrest.LOG_LEVEL_INFO) return;
+        if (!(getLogLevel() > Befrest.LOG_LEVEL_INFO))
         Log.i(tag, message);
         if (!LogToFile) return;
         final int Tid = Process.myTid();
@@ -197,7 +197,7 @@ public final class BefLog {
     }
 
     public static void v(final String tag, final String message) {
-        if (getLogLevel() > Befrest.LOG_LEVEL_VERBOSE) return;
+        if (!(getLogLevel() > Befrest.LOG_LEVEL_VERBOSE))
         Log.v(tag, message);
         if (!LogToFile) return;
         final int Tid = Process.myTid();
@@ -218,7 +218,7 @@ public final class BefLog {
     }
 
     public static void w(final String tag, final String message) {
-        if (getLogLevel() > Befrest.LOG_LEVEL_WARN) return;
+        if (!(getLogLevel() > Befrest.LOG_LEVEL_WARN))
         Log.w(tag, message);
         if (!LogToFile) return;
         final int Tid = Process.myTid();
@@ -238,8 +238,11 @@ public final class BefLog {
         }
     }
 
+    public static void wtf(String TAG, Throwable ex) {
+        e(TAG, ex);
+    }
+
     public static void v(String TAG, String message, Object... objects) {
-        if (getLogLevel() > Befrest.LOG_LEVEL_VERBOSE) return;
         String s = "";
         for (Object o : objects) {
             s += o + ", ";

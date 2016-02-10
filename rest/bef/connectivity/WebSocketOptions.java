@@ -17,6 +17,7 @@
 package rest.bef.connectivity;
 
 
+import android.os.Build;
 
 /**
  * WebSockets connection options. This can be supplied to WebSocketConnection in connect().
@@ -33,7 +34,8 @@ public class WebSocketOptions {
    private int mSocketConnectTimeout;
    private boolean mValidateIncomingUtf8;
    private boolean mMaskClientFrames;
-   private int mReconnectInterval;
+//   private int mReconnectInterval;
+
 
 
    /**
@@ -41,15 +43,15 @@ public class WebSocketOptions {
     */
    public WebSocketOptions() {
 
-      mMaxFramePayloadSize = 128 * 1024;
-      mMaxMessagePayloadSize = 128 * 1024;
+      mMaxFramePayloadSize = 128 * 1024; // much more than 32k
+      mMaxMessagePayloadSize = 128 * 1024; // much more than 32k
       mReceiveTextMessagesRaw = false;
       mTcpNoDelay = true;
       mSocketReceiveTimeout = 200;
       mSocketConnectTimeout = 6000;
       mValidateIncomingUtf8 = true;
       mMaskClientFrames = true;
-      mReconnectInterval = 0;  // no reconnection by default
+//      mReconnectInterval = 0;  // no reconnection by default
    }
 
    /**
@@ -67,7 +69,7 @@ public class WebSocketOptions {
       mSocketConnectTimeout = other.mSocketConnectTimeout;
       mValidateIncomingUtf8 = other.mValidateIncomingUtf8;
       mMaskClientFrames = other.mMaskClientFrames;
-      mReconnectInterval = other.mReconnectInterval;
+//      mReconnectInterval = other.mReconnectInterval;
    }
 
    /**
@@ -256,16 +258,16 @@ public class WebSocketOptions {
       return mMaskClientFrames;
    }
    
-   /**
-    * Set reconnect interval
-    * 
-    * @param reconnectInterval	Interval in ms, 0 - no reconnection
-    */
-   public void setReconnectInterval(int reconnectInterval) {
-	   mReconnectInterval = reconnectInterval;
-   }
-   
-   public int getReconnectInterval() {
-	   return mReconnectInterval;
-   }
+//   /**
+//    * Set reconnect interval
+//    *
+//    * @param reconnectInterval	Interval in ms, 0 - no reconnection
+//    */
+//   public void setReconnectInterval(int reconnectInterval) {
+//	   mReconnectInterval = reconnectInterval;
+//   }
+//
+//   public int getReconnectInterval() {
+//	   return mReconnectInterval;
+//   }
 }
