@@ -30,7 +30,7 @@ import java.util.Locale;
 
 public final class BefLog {
     private static final String TAG = "BefLog";
-    private static final boolean LogToFile = true;
+    private static final boolean LogToFile = false;
     private static final String LogsDir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/BefrestLogs_" + Befrest.Util.getSdkVersionName();
     private OutputStreamWriter streamWriter = null;
     private SimpleDateFormat dateFormat;
