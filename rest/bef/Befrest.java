@@ -445,7 +445,6 @@ public final class Befrest {
         private static final String BROADCAST_SENDING_PERMISSION_POSTFIX = ".permission.PUSH_SERVICE";
         private static final int API_VERSION = 1;
         private static final int SDK_VERSION = 1;
-        private static final String SDK_VERSION_NAME = "1.0.2-test";
         static long lastScreenOnTime;
 
         private static WifiManager.WifiLock wifiLock;
@@ -595,10 +594,6 @@ public final class Befrest {
             }
             PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
             return pm.isScreenOn();
-        }
-
-        static String getSdkVersionName(){
-            return SDK_VERSION_NAME;
         }
     }
 }

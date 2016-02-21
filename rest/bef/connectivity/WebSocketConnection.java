@@ -23,7 +23,9 @@ import android.os.Message;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
@@ -44,9 +46,7 @@ public class WebSocketConnection implements WebSocket {
     protected WebSocketWriter mWriter;
     protected HandlerThread mWriterThread;
     protected WebSocketConnector connector;
-
     protected Socket mTransportChannel;
-
     private String mWsScheme;
     private String mWsHost;
     private int mWsPort;
@@ -76,8 +76,16 @@ public class WebSocketConnection implements WebSocket {
             Socket soc;
             if (mWsScheme.equals("wss")) {
                 SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
-                SSLSocket secSoc = (SSLSocket) factory.createSocket(mWsHost, mWsPort);
+//                SSLSocket secSoc = (SSLSocket) factory.createSocket(mWsHost, mWsPort);
+
+
+                SSLSocket secSoc = (SSLSocket) factory.createSocket();
                 secSoc.setUseClientMode(true);
+                secSoc.connect(new InetSocketAddress(mWsHost, mWsPort), mOptions.getSocketConnectTimeout());
+//                secSoc.setSoTimeout(mOptions.getSocketReceiveTimeout());
+                secSoc.setTcpNoDelay(mOptions.getTcpNoDelay());
+
+
                 secSoc.addHandshakeCompletedListener(new HandshakeCompletedListener() {
                     public void handshakeCompleted(HandshakeCompletedEvent event) {
                         BefLog.d(TAG, "ssl handshake completed");
