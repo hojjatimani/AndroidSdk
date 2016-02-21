@@ -257,6 +257,7 @@ public final class PushService extends Service {
                 break;
             case NETWORK_DISCONNECTED:
                 cancelALLPendingIntents();
+                mConnection.disconnect();
                 break;
             case WAKEUP:
                 new WakeServiceUp().start();
