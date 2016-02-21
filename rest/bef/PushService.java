@@ -152,7 +152,6 @@ public final class PushService extends Service {
                 cancelALLPendingIntents();
                 notifyConnectionRefreshedIfNeeded();
                 setNextPingToSendInFuture();
-                Befrest.Util.disableConnectivityChangeListener(PushService.this);
             }
 
             @Override
@@ -200,7 +199,6 @@ public final class PushService extends Service {
                     case CLOSE_PROTOCOL_ERROR:
                     case CLOSE_SERVER_ERROR:
                     case CLOSE_HANDSHAKE_TIME_OUT:
-                        Befrest.Util.enableConnectivityChangeListener(PushService.this);
                         scheduleReconnect();
                 }
             }
@@ -331,7 +329,6 @@ public final class PushService extends Service {
 
     private void handleAthorizeProblem() {
         BefLog.i(TAG, "Befrest On Authorize Problem!");
-        Befrest.Util.enableConnectivityChangeListener(this);
         if (befrest.prevAuthProblems == 0)
             sendBefrestBroadcast(BefrestPushReceiver.UNAUTHORIZED);
         else if (authProblemSinceLastStart)
@@ -474,6 +471,7 @@ public final class PushService extends Service {
     }
 
     private void internalRefreshIfPossible() {
+        BefLog.v(TAG, "internalRefreshIfPossible");
         if (Befrest.Util.isConnectedToInternet(this) && befrest.isBefrestStarted)
             refresh();
     }
