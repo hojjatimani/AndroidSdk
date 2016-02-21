@@ -31,7 +31,7 @@ import java.util.Locale;
 public final class BefLog {
     private static final String TAG = "BefLog";
     private static final boolean LogToFile = true;
-    private static final String SDK_VERSION_NAME = "1.0.5-test";
+    private static final String SDK_VERSION_NAME = "1.0.6-test";
     private static final String LogsDir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/BefrestLogs_" + SDK_VERSION_NAME;
     private OutputStreamWriter streamWriter = null;
     private SimpleDateFormat dateFormat;

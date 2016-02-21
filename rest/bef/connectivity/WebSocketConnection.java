@@ -113,16 +113,24 @@ public class WebSocketConnection implements WebSocket {
 			 */
             try {
                 mTransportChannel = createSocket();
-            } catch (IOException | AssertionError e) {
-                if (e instanceof IOException || isAndroidGetsocknameError(((AssertionError) e))) {
+            } catch (IOException e) {
+                BefLog.e(TAG, e);
+                if (mWsHandler != null)
+                    mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT,
+                            e.getMessage());
+                else
+                    BefLog.w(TAG, "Befrest Could Not Call OnClose From Connector.");
+
+            } catch (AssertionError e) {
+                if (isAndroidGetsocknameError(e)) {
                     BefLog.e(TAG, e);
                     if (mWsHandler != null)
                         mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT,
                                 e.getMessage());
                     else
-                        BefLog.w(TAG, "Befrest Warning! mWsHandler is null where it is expected to be valid!");
+                        BefLog.w(TAG, "Befrest Could Not Call OnClose From Connector.");
                 } else {
-                    throw (AssertionError) e;
+                    throw e;
                 }
             }
 
@@ -303,9 +311,9 @@ public class WebSocketConnection implements WebSocket {
 
 
     public void disconnect() {
-        closeConnection();
         //mWsHandler must be set to null
         mWsHandler = null;
+        closeConnection();
         BefLog.v(TAG, "disconnected");
     }
 
@@ -364,10 +372,11 @@ public class WebSocketConnection implements WebSocket {
             if (mTransportChannel != null) {
                 try {
                     mTransportChannel.close();
-                } catch (IOException | AssertionError e) {
-                    if (e instanceof IOException || isAndroidGetsocknameError((AssertionError) e))
-                        BefLog.e(TAG, e);
-                    else throw ((AssertionError) e);
+                } catch (IOException e) {
+                    BefLog.e(TAG, e);
+                } catch (AssertionError e) {
+                    if (!isAndroidGetsocknameError(e))
+                        throw e;
                 }
             } else {
                 BefLog.v(TAG, "mTransportChannel already NULL");
