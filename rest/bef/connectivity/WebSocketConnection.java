@@ -36,6 +36,7 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
 import rest.bef.BefLog;
+import rest.bef.Befrest;
 
 
 public class WebSocketConnection implements WebSocket {
@@ -112,14 +113,17 @@ public class WebSocketConnection implements WebSocket {
 			 */
             try {
                 mTransportChannel = createSocket();
-            } catch (IOException e) {
-                BefLog.e(TAG, e);
-                if (mWsHandler != null)
-                    mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT,
-                            e.getMessage());
-                else
-                    BefLog.w(TAG, "Befrest Warning! mWsHandler is null where it is expected to be valid!");
-                return;
+            } catch (IOException | AssertionError e) {
+                if (e instanceof IOException || isAndroidGetsocknameError(((AssertionError) e))) {
+                    BefLog.e(TAG, e);
+                    if (mWsHandler != null)
+                        mWsHandler.onClose(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT,
+                                e.getMessage());
+                    else
+                        BefLog.w(TAG, "Befrest Warning! mWsHandler is null where it is expected to be valid!");
+                } else {
+                    throw (AssertionError) e;
+                }
             }
 
             if (isConnected()) {
@@ -360,8 +364,10 @@ public class WebSocketConnection implements WebSocket {
             if (mTransportChannel != null) {
                 try {
                     mTransportChannel.close();
-                } catch (IOException e) {
-                    BefLog.e(TAG, e);
+                } catch (IOException | AssertionError e) {
+                    if (e instanceof IOException || isAndroidGetsocknameError((AssertionError) e))
+                        BefLog.e(TAG, e);
+                    else throw ((AssertionError) e);
                 }
             } else {
                 BefLog.v(TAG, "mTransportChannel already NULL");
@@ -532,5 +538,14 @@ public class WebSocketConnection implements WebSocket {
 
             }
         }
+    }
+
+    /**
+     * Returns true if {@code e} is due to a firmware bug fixed after Android 4.2.2.
+     * https://code.google.com/p/android/issues/detail?id=54072
+     */
+    static boolean isAndroidGetsocknameError(AssertionError e) {
+        return e.getCause() != null && e.getMessage() != null
+                && e.getMessage().contains("getsockname failed");
     }
 }
