@@ -24,7 +24,7 @@ import android.net.ConnectivityManager;
  * Created by ehsan on 11/24/2015.
  */
 public final class BefrestConnectivityChangeReceiver extends BroadcastReceiver {
-    private static final String TAG = "BefrestConnectivityChangeReceiver";
+    private static final String TAG = BefLog.TAG_PREF + "BefrestConnectivityChangeReceiver";
 
     @Override
     public void onReceive(Context context, Intent intent) {

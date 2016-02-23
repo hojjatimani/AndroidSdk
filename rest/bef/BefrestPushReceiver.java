@@ -26,6 +26,7 @@ import android.os.Parcelable;
  * either dynamically in code or statically in projects AndroidManifest file.
  */
 public abstract class BefrestPushReceiver extends BroadcastReceiver {
+    private static final String TAG = BefLog.TAG_PREF + "BefrestPushReceiver";
 
     static final int PUSH = 0;
     static final int UNAUTHORIZED = 1;
@@ -33,7 +34,6 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
     static final int BEFREST_CONNECTED = 3;
     static final String BROADCAST_TYPE = "BROADCAST_TYPE";
     static final String ACTION_BEFREST_PUSH = "rest.bef.broadcasts.ACTION_BEFREST_PUSH";
-    private static final String TAG = "BefrestPushReceiver";
 
     @Override
     public final void onReceive(Context context, Intent intent) {

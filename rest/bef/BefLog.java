@@ -29,7 +29,8 @@ import java.util.Date;
 import java.util.Locale;
 
 public final class BefLog {
-    private static final String TAG = "BefLog";
+    public static final String TAG_PREF = "BEFREST-";
+    private static final String TAG = TAG_PREF + "BefLog";
     private static final boolean LogToFile = true;
     private static final String SDK_VERSION_NAME = "1.0.6-test";
     private static final String LogsDir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/BefrestLogs_" + SDK_VERSION_NAME;
@@ -38,7 +39,6 @@ public final class BefLog {
     private FileLogThread logQueue = null;
     private File currentFile = null;
     private File networkFile = null;
-
 
     private static int getLogLevel() {
         return Befrest.getLogLevel();

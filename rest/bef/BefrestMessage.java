@@ -22,7 +22,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 public final class BefrestMessage implements Parcelable {
-    private static final String TAG = "BefrestMessage";
+    private static final String TAG = BefLog.TAG_PREF + "BefrestMessage";
 
     /* package */ enum MsgType {
         DATA, BATCH, PONG;

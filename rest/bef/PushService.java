@@ -35,7 +35,7 @@ import rest.bef.connectivity.WebSocketException;
 
 public final class PushService extends Service {
 
-    private static final String TAG = PushService.class.getSimpleName();
+    private static final String TAG = BefLog.TAG_PREF + "PushService";
 
     //events
     /* package */ static final String NETWORK_CONNECTED = "NETWORK_CONNECTED";

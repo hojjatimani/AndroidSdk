@@ -20,8 +20,9 @@ import android.content.Context;
 import android.content.Intent;
 
 public class WakeupAlarmReceiver extends BroadcastReceiver {
+    private static final String TAG = BefLog.TAG_PREF + "WakeupAlarmReceiver";
+
     protected static final String ACTION_WAKEUP = "rest.bef.broadcasts.WAKEUP";
-    private static final String TAG = "WakeupAlarmReceiver";
 
     @Override
     public void onReceive(Context context, Intent intent) {

@@ -41,8 +41,7 @@ import rest.bef.BefLog;
  * which gracefully shuts down the background receiver thread.
  */
 public class WebSocketReader extends Thread {
-
-    private static final String TAG = WebSocketReader.class.getName();
+    private static final String TAG = BefLog.TAG_PREF + "WebSocketReader";
 
     private final Handler mMaster;
     private final Socket mSocket;

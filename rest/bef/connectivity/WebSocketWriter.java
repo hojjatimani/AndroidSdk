@@ -42,8 +42,7 @@ import rest.bef.BefLog;
  * underlying TCP socket.
  */
 public class WebSocketWriter extends Handler {
-
-    private static final String TAG = WebSocketWriter.class.getName();
+    private static final String TAG = BefLog.TAG_PREF + "WebSocketWriter";
 
     /// Random number generator for handshake key and frame mask generation.
     private final Random mRng = new Random();

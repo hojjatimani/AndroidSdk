@@ -40,7 +40,8 @@ import rest.bef.Befrest;
 
 
 public class WebSocketConnection implements WebSocket {
-    private static final String TAG = "WebSocketConnection";
+    private static final String TAG = BefLog.TAG_PREF + "WebSocketConnection";
+
 
     protected Handler mMasterHandler;
     protected WebSocketReader mReader;

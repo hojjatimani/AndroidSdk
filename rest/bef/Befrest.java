@@ -31,7 +31,6 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Base64;
-import android.util.Log;
 import android.view.Display;
 
 import java.io.UnsupportedEncodingException;
@@ -77,6 +76,7 @@ public final class Befrest {
     boolean checkInSleep;
     boolean isBefrestStarted;
     String topics;
+    boolean connectionDataChangedSinceLastStart;
 
     boolean refreshIsRequested = false;
     long lastAcceptedRefreshRequestTime = 0;
@@ -116,7 +116,7 @@ public final class Befrest {
 
     private static final int LOG_LEVEL_DEFAULT = LOG_LEVEL_INFO;
 
-    private static String TAG = "Befrest";
+    private static String TAG = BefLog.TAG_PREF + "Befrest";
 
     /**
      * Name for sharedPreferences used for saving Befrest data.
@@ -140,11 +140,13 @@ public final class Befrest {
     public Befrest init(long uId, String auth, String chId) {
         if (chId == null || !(chId.length() > 0))
             throw new IllegalArgumentException("invalid chId!");
-        this.uId = uId;
-        this.auth = auth;
-        this.chId = chId;
-        clearTempData();
-        saveToPrefs(context, uId, auth, chId);
+        if(uId != this.uId || (auth != null && !auth.equals(this.auth)) || !chId.equals(this.chId)) {
+            this.uId = uId;
+            this.auth = auth;
+            this.chId = chId;
+            clearTempData();
+            saveToPrefs(context, uId, auth, chId);
+        }
         return this;
     }
 
@@ -154,11 +156,13 @@ public final class Befrest {
      * @param uId uId
      */
     public Befrest setUId(long uId) {
-        this.uId = uId;
-        clearTempData();
-        SharedPreferences.Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-        prefEditor.putLong(PREF_U_ID, uId);
-        prefEditor.commit();
+        if(uId != this.uId) {
+            this.uId = uId;
+            clearTempData();
+            SharedPreferences.Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
+            prefEditor.putLong(PREF_U_ID, uId);
+            prefEditor.commit();
+        }
         return this;
     }
 
@@ -170,11 +174,13 @@ public final class Befrest {
     public Befrest setChId(String chId) {
         if (chId == null || !(chId.length() > 0))
             throw new IllegalArgumentException("invalid chId!");
-        this.chId = chId;
-        clearTempData();
-        SharedPreferences.Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-        prefEditor.putString(PREF_CH_ID, chId);
-        prefEditor.commit();
+        if(!chId.equals(this.chId)) {
+            this.chId = chId;
+            clearTempData();
+            SharedPreferences.Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
+            prefEditor.putString(PREF_CH_ID, chId);
+            prefEditor.commit();
+        }
         return this;
     }
 
@@ -186,11 +192,13 @@ public final class Befrest {
     public Befrest setAuth(String auth) {
         if (auth == null || !(auth.length() > 0))
             throw new IllegalArgumentException("invalid auth!");
-        this.auth = auth;
-        clearTempData();
-        SharedPreferences.Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-        prefEditor.putString(PREF_AUTH, auth);
-        prefEditor.commit();
+        if (!auth.equals(this.auth)) {
+            this.auth = auth;
+            clearTempData();
+            SharedPreferences.Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
+            prefEditor.putString(PREF_AUTH, auth);
+            prefEditor.commit();
+        }
         return this;
     }
 
@@ -202,12 +210,13 @@ public final class Befrest {
      * @throws IllegalStateException if be called without a prior call to init()
      */
     public void start() {
-        Log.i(TAG, "starting befrest");
+        BefLog.i(TAG, "starting befrest");
         if (uId < 0 || chId == null || chId.length() < 1)
             throw new IllegalStateException("uId and chId are not properly defined!");
-        context.stopService(new Intent(context, PushService.class)); // stop service if is running with old credentials
-        clearTempData();
+        if (connectionDataChangedSinceLastStart)
+            context.stopService(new Intent(context, PushService.class)); // stop service if is running with old credentials
         context.startService(new Intent(context, PushService.class).putExtra(PushService.CONNECT, true));
+        connectionDataChangedSinceLastStart = false;
         setBefrestStarted(true);
         Util.enableConnectivityChangeListener(context);
         if (checkInSleep) scheduleWakeUP();
@@ -394,13 +403,12 @@ public final class Befrest {
         subscribeHeaders = null;
         pingUrl = null;
         authHeader = null;
+        connectionDataChangedSinceLastStart = true;
     }
 
     String getSubscribeUri() {
         if (subscribeUrl == null)
             subscribeUrl = String.format(Locale.US, "wss://gw.bef.rest:8443/xapi/%d/subscribe/%d/%s/%d", Util.API_VERSION, uId, chId, Util.SDK_VERSION);
-//            subscribeUrl = String.format(Locale.US, "ws://gw.bef.rest:8000/xapi/%d/subscribe/%d/%s/%d", Util.API_VERSION, uId, chId, Util.SDK_VERSION);
-        Log.d(TAG, "getSubscribeUri: " + subscribeUrl);
         return subscribeUrl;
     }
 
@@ -486,7 +494,7 @@ public final class Befrest {
          * Release the wifilock acquired before
          */
         static void releaseWifiLock() {
-            Log.v(TAG, "releaseWifiLock()");
+            BefLog.v(TAG, "releaseWifiLock()");
             if (wifiLock != null && wifiLock.isHeld()) {
                 wifiLock.release();
                 BefLog.d(TAG, "Befrest WifiLock Released");
@@ -517,7 +525,7 @@ public final class Befrest {
             ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo wifiInfo = connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
             boolean res = wifiInfo.isConnectedOrConnecting();
-            Log.v(TAG, "isWifiConnectedOrConnecting() returned: " + res);
+            BefLog.v(TAG, "isWifiConnectedOrConnecting() returned: " + res);
             return res;
         }
 
