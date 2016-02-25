@@ -122,7 +122,11 @@ public class WebSocketReader extends Thread {
      * @param message Message to send to master.
      */
     protected void notify(Object message) {
-
+        if (mState == STATE_CLOSED) {
+            //should not come here
+            BefLog.w(TAG, "Befrest Reader Tried To Notify Master In Closed State!");
+            return;
+        }
         Message msg = mMaster.obtainMessage();
         msg.obj = message;
         mMaster.sendMessage(msg);

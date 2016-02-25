@@ -32,13 +32,12 @@ public final class BefLog {
     public static final String TAG_PREF = "BEFREST-";
     private static final String TAG = TAG_PREF + "BefLog";
     private static final boolean LogToFile = false;
-    private static final String SDK_VERSION_NAME = "1.0.7";
-    private static final String LogsDir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/BefrestLogs_" + SDK_VERSION_NAME;
+    private static final String SDK_VERSION_NAME = "1.0.12";
+
     private OutputStreamWriter streamWriter = null;
     private SimpleDateFormat dateFormat;
     private FileLogThread logQueue = null;
     private File currentFile = null;
-    private File networkFile = null;
 
     private static int getLogLevel() {
         return Befrest.getLogLevel();
@@ -65,6 +64,7 @@ public final class BefLog {
         }
         dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault());
         try {
+            String LogsDir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/BefrestLogs_" + SDK_VERSION_NAME;
             Log.v("BefLog File", "path : " + LogsDir);
             File dir = new File(LogsDir);
             dir.mkdirs();
@@ -249,19 +249,5 @@ public final class BefLog {
             s += o + ", ";
         }
         v(TAG, message + " " + "[" + s + "]");
-    }
-
-    public static void cleanupLogs() {
-        File dir = new File(LogsDir);
-        File[] files = dir.listFiles();
-        for (File file : files) {
-            if (getInstance().currentFile != null && file.getAbsolutePath().equals(getInstance().currentFile.getAbsolutePath())) {
-                continue;
-            }
-            if (getInstance().networkFile != null && file.getAbsolutePath().equals(getInstance().networkFile.getAbsolutePath())) {
-                continue;
-            }
-            file.delete();
-        }
     }
 }

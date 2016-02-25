@@ -32,12 +32,17 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
     static final int UNAUTHORIZED = 1;
     static final int CONNECTION_REFRESHED = 2;
     static final int BEFREST_CONNECTED = 3;
+    static final int Anomaly = 4;
     static final String BROADCAST_TYPE = "BROADCAST_TYPE";
     static final String ACTION_BEFREST_PUSH = "rest.bef.broadcasts.ACTION_BEFREST_PUSH";
+    static final String KEY_TIME_SENT = "KEY_TIME_SENT";
 
     @Override
     public final void onReceive(Context context, Intent intent) {
         int type = intent.getIntExtra(BROADCAST_TYPE, -1);
+        String timeSent = intent.getStringExtra(KEY_TIME_SENT);
+        Befrest.getInstance(context).reportBroadcastReceived(context, timeSent+":"+type);
+        BefLog.v(TAG, "Broadcast Received :: type: " + type + "      timeSent:" + timeSent);
         switch (type) {
             case PUSH:
                 Parcelable[] p = intent.getParcelableArrayExtra(Befrest.Util.KEY_MESSAGE_PASSED);
@@ -53,6 +58,9 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
                 break;
             case BEFREST_CONNECTED:
                 onBefrestConnected(context);
+                break;
+            case Anomaly:
+                onAnomaly(context, "" + intent.getStringExtra(Befrest.Util.KEY_MESSAGE_PASSED));
                 break;
             default:
                 BefLog.e(TAG, "Befrest Internal ERROR! Unknown Befrest Action!!");
@@ -93,5 +101,8 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
      * @param context
      */
     public void onBefrestConnected(Context context) {
+    }
+
+    public void onAnomaly(Context context, String data){
     }
 }

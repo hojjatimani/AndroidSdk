@@ -35,6 +35,8 @@ import android.view.Display;
 
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 
@@ -44,6 +46,7 @@ import rest.bef.connectivity.NameValuePair;
  * Main class to interact with Befrest service.
  */
 public final class Befrest {
+
     private static volatile Befrest instance;
 
     private Befrest(Context context) {
@@ -56,6 +59,16 @@ public final class Befrest {
         logLevel = prefs.getInt(PREF_LOG_LEVEL, LOG_LEVEL_DEFAULT);
         checkInSleep = prefs.getBoolean(PREF_CHECK_IN_DEEP_SLEEP, false);
         isBefrestStarted = prefs.getBoolean(PREF_IS_SERVICE_STARTED, false);
+
+
+        //for test
+        reportedContinuousCloses = prefs.getInt(PREF_CONTINUOUS_CLOSES, 0);
+        continuousClosesTypes = prefs.getString(PREF_CONTINUOUS_CLOSES_TYPES, "");
+
+        sentBroadcasts = new ArrayList<>();
+        String bai = prefs.getString(PREF_BROADCAST_ANOMALY_INFO, "");
+        if (bai.length() > 0) sentBroadcasts.addAll(Arrays.asList(bai.split("_")));
+        shouldNotReportBroadcastAnomaly = prefs.getBoolean(PREF_SHOULD_NOT_REPORT_BROADCAST_ANOMALY, false);
     }
 
     public static Befrest getInstance(Context context) {
@@ -81,8 +94,11 @@ public final class Befrest {
     boolean refreshIsRequested = false;
     long lastAcceptedRefreshRequestTime = 0;
 
-    private static final int[] AuthProblemBroadcastDelay = {0, 5 * 1000, 10 * 1000, 25 * 1000, 50 * 1000};
+    private static final int[] AuthProblemBroadcastDelay = {0, 60 * 1000, 240 * 1000, 600 * 1000};
     int prevAuthProblems = 0;
+
+    private int reportedContinuousCloses;
+    private String continuousClosesTypes;
 
     private String pingUrl;
     private String subscribeUrl;
@@ -129,6 +145,10 @@ public final class Befrest {
     private static final String PREF_TOPICS = "PREF_TOPICS";
     private static final String PREF_IS_SERVICE_STARTED = "PREF_IS_SERVICE_STARTED";
     private static final String PREF_LOG_LEVEL = "PREF_LOG_LEVEL";
+    public static final String PREF_CONTINUOUS_CLOSES = "PREF_CONTINUOUS_CLOSES";
+    public static final String PREF_CONTINUOUS_CLOSES_TYPES = "PREF_CONTINUOUS_CLOSES_TYPES";
+    public static final String PREF_BROADCAST_ANOMALY_INFO = "PREF_BROADCAST_ANOMALY_INFO";
+    private static final String PREF_SHOULD_NOT_REPORT_BROADCAST_ANOMALY = "PREF_SHOULD_NOT_REPORT_BROADCAST_ANOMALY";
 
     /**
      * Initialize push receive service. You can also use setter messages for initializing.
@@ -140,7 +160,7 @@ public final class Befrest {
     public Befrest init(long uId, String auth, String chId) {
         if (chId == null || !(chId.length() > 0))
             throw new IllegalArgumentException("invalid chId!");
-        if(uId != this.uId || (auth != null && !auth.equals(this.auth)) || !chId.equals(this.chId)) {
+        if (uId != this.uId || (auth != null && !auth.equals(this.auth)) || !chId.equals(this.chId)) {
             this.uId = uId;
             this.auth = auth;
             this.chId = chId;
@@ -156,7 +176,7 @@ public final class Befrest {
      * @param uId uId
      */
     public Befrest setUId(long uId) {
-        if(uId != this.uId) {
+        if (uId != this.uId) {
             this.uId = uId;
             clearTempData();
             SharedPreferences.Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
@@ -174,7 +194,7 @@ public final class Befrest {
     public Befrest setChId(String chId) {
         if (chId == null || !(chId.length() > 0))
             throw new IllegalArgumentException("invalid chId!");
-        if(!chId.equals(this.chId)) {
+        if (!chId.equals(this.chId)) {
             this.chId = chId;
             clearTempData();
             SharedPreferences.Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
@@ -408,7 +428,7 @@ public final class Befrest {
 
     String getSubscribeUri() {
         if (subscribeUrl == null)
-            subscribeUrl = String.format(Locale.US, "wss://gw.bef.rest:8443/xapi/%d/subscribe/%d/%s/%d", Util.API_VERSION, uId, chId, Util.SDK_VERSION);
+            subscribeUrl = String.format(Locale.US, "wss://gw.bef.rest/xapi/%d/subscribe/%d/%s/%d", Util.API_VERSION, uId, chId, Util.SDK_VERSION);
         return subscribeUrl;
     }
 
@@ -429,13 +449,6 @@ public final class Befrest {
         return authHeader;
     }
 
-    String getPingUrl() {
-        if (pingUrl == null) {
-            pingUrl = String.format(Locale.US, "https://gw.bef.rest:8443/xapi/%d/ping/%d/%s/%d", Util.API_VERSION, uId, chId, Util.SDK_VERSION);
-        }
-        return pingUrl;
-    }
-
     void setStartServiceAlarm() {
         AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         Intent intent = new Intent(context, PushService.class).putExtra(PushService.SERVICE_STOPPED, true);
@@ -446,6 +459,88 @@ public final class Befrest {
 
     int getSendOnAuthorizeBroadcastDelay() {
         return AuthProblemBroadcastDelay[prevAuthProblems < AuthProblemBroadcastDelay.length ? prevAuthProblems : AuthProblemBroadcastDelay.length - 1];
+    }
+
+    public void reportOnClose(Context context, int code) {
+        BefLog.d(TAG, "reportOnClose :: total:" + reportedContinuousCloses + " code:" + code);
+        reportedContinuousCloses++;
+        continuousClosesTypes += code + ",";
+        SharedPreferences.Editor editor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
+        editor.putString(PREF_CONTINUOUS_CLOSES_TYPES, continuousClosesTypes);
+        editor.putInt(PREF_CONTINUOUS_CLOSES, reportedContinuousCloses);
+        editor.commit();
+        //TODO 3 is for test!
+        if (reportedContinuousCloses == 3 || reportedContinuousCloses == 10) {
+            sendAnomalyBroadcast(context, continuousClosesTypes);
+        } else if (reportedContinuousCloses == 50) {
+            clearAnomalyHistory();
+        }
+    }
+
+    void sendAnomalyBroadcast(Context context, String data) {
+        Intent intent = new Intent(BefrestPushReceiver.ACTION_BEFREST_PUSH);
+        intent.putExtra(BefrestPushReceiver.BROADCAST_TYPE, BefrestPushReceiver.Anomaly);
+        intent.putExtra(Util.KEY_MESSAGE_PASSED, data);
+        String permission = Util.getBroadcastSendingPermission(context);
+        long now = System.nanoTime();
+        intent.putExtra(BefrestPushReceiver.KEY_TIME_SENT, "" + now);
+        context.sendBroadcast(intent, permission);
+        reportBroadcastSent(now + ":" + BefrestPushReceiver.Anomaly);
+        BefLog.v(TAG, "Anomaly Broadcast Sent. permission:" + permission);
+    }
+
+    void reportOnOpen() {
+        BefLog.v(TAG, "reportOnOpen");
+        clearAnomalyHistory();
+    }
+
+    private void clearAnomalyHistory() {
+        reportedContinuousCloses = 0;
+        continuousClosesTypes = "";
+        SharedPreferences.Editor editor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
+        editor.putString(PREF_CONTINUOUS_CLOSES_TYPES, continuousClosesTypes);
+        editor.putInt(PREF_CONTINUOUS_CLOSES, 0);
+        editor.commit();
+    }
+
+    boolean shouldNotReportBroadcastAnomaly;
+    ArrayList<String> sentBroadcasts;
+
+    void reportBroadcastReceived(Context context, String id) {
+        if (shouldNotReportBroadcastAnomaly) return;
+        sentBroadcasts.remove(id);
+        context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putString(PREF_BROADCAST_ANOMALY_INFO, getBroadcastAnomalyInfo()).commit();
+    }
+
+    void reportBroadcastSent(String id) {
+        if (shouldNotReportBroadcastAnomaly) return;
+        sentBroadcasts.add(id);
+        context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit().putString(PREF_BROADCAST_ANOMALY_INFO, getBroadcastAnomalyInfo()).commit();
+    }
+
+    public boolean hasBroadcastAnomalyHappened() {
+        if (sentBroadcasts.size() > 10) {
+            stopTrackingBroadcasts();
+            return true;
+        }
+        return false;
+    }
+
+    private void stopTrackingBroadcasts() {
+        shouldNotReportBroadcastAnomaly = true;
+        SharedPreferences.Editor editor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
+        editor.putBoolean(PREF_SHOULD_NOT_REPORT_BROADCAST_ANOMALY, true);
+        editor.commit();
+    }
+
+    public String getBroadcastAnomalyInfo() {
+        String res = "";
+        for (String id : sentBroadcasts) {
+            res += id + "_";
+        }
+        if (res.length() > 0) res = res.substring(0, res.length() - 1);
+        BefLog.v(TAG, "BroadcastAnomalyInfo: " + res);
+        return res;
     }
 
     static class Util {

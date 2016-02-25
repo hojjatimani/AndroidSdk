@@ -24,10 +24,12 @@ import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Parcelable;
+
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+
 import rest.bef.connectivity.WebSocketConnection;
 import rest.bef.connectivity.WebSocketConnectionHandler;
 import rest.bef.connectivity.WebSocketException;
@@ -48,7 +50,7 @@ public final class PushService extends Service {
     /* package */ static final String RESTART = "RESTART";
 
     //pinging variables and constants
-    private static final int[] PING_INTERVAL = {10 * 1000, 30 * 1000, 60 * 1000, 100 * 1000, 150 * 1000 , 210 * 1000};
+    private static final int[] PING_INTERVAL = {120 * 1000, 300 * 1000, 480 * 1000};
     private static final int PING_TIMEOUT = 5 * 1000;
     private static final String PING_DATA_PREFIX = String.valueOf((int) (Math.random() * 9999));
     private int currentPingId = 0;
@@ -68,7 +70,7 @@ public final class PushService extends Service {
     };
 
     //retrying variables and constants
-    private static final int[] RETRY_INTERVAL = {0, 5 * 1000, 10 * 1000, 25 * 1000, 50 * 1000};
+    private static final int[] RETRY_INTERVAL = {0, 25 * 1000, 60 * 1000, 240 * 1000, 600 * 1000};
     private int prevFailedConnectTries;
     private Runnable retry = new Runnable() {
         @Override
@@ -145,6 +147,7 @@ public final class PushService extends Service {
             public void onOpen() {
                 BefLog.i(TAG, "Befrest Connected");
                 connecting = false;
+                befrest.reportOnOpen();
                 prevFailedConnectTries = prevSuccessfulPings = 0;
                 authProblemSinceLastStart = true;
                 befrest.prevAuthProblems = 0;
@@ -188,6 +191,7 @@ public final class PushService extends Service {
                 BefLog.d(TAG, "WebsocketConnectionHandler: " + System.identityHashCode(this) + "Connection lost. Code: " + code + ", Reason: " + reason);
                 BefLog.i(TAG, "Befrest Connection Closed. Will Try To Reconnect If Possible.");
                 connecting = false;
+                befrest.reportOnClose(PushService.this, code);
                 switch (code) {
                     case CLOSE_UNAUTHORIZED:
                         handleAthorizeProblem();
@@ -381,7 +385,12 @@ public final class PushService extends Service {
             receivedMessages.clear();
             revisePinging();
         }
-        sendBroadcast(intent, Befrest.Util.getBroadcastSendingPermission(this));
+        String permission = Befrest.Util.getBroadcastSendingPermission(this);
+        long now = System.nanoTime();
+        intent.putExtra(BefrestPushReceiver.KEY_TIME_SENT, "" + now);
+        sendBroadcast(intent, permission);
+        befrest.reportBroadcastSent(now + ":" + type);
+        BefLog.v(TAG, "broadcast sent:: " + type + " permission:" + permission);
     }
 
     private void sendPing() {

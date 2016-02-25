@@ -221,9 +221,12 @@ public class WebSocketConnection implements WebSocket {
 
     private void disconnectAndNotify(int code, String reason) {
         BefLog.v(TAG, "fail connection [code = " + code + ", reason = " + reason);
-        closeConnection();
-        mWsHandler.onClose(code, reason);
-        mWsHandler = null;
+        ConnectionHandler tempHandler = mWsHandler;
+//        closeConnection();
+        disconnect();
+//        mWsHandler.onClose(code, reason);
+//        mWsHandler = null;
+        tempHandler.onClose(code, reason);
     }
 
 
@@ -312,7 +315,8 @@ public class WebSocketConnection implements WebSocket {
 
 
     public void disconnect() {
-        //mWsHandler must be set to null
+        //mWsHandler must be set to null to prevent any messages
+        //from being sent to PushService form this connection
         mWsHandler = null;
         closeConnection();
         BefLog.v(TAG, "disconnected");
@@ -334,21 +338,20 @@ public class WebSocketConnection implements WebSocket {
             BefLog.v(TAG, "mReader.quit();");
         } else BefLog.v(TAG, "mReader was null (mReader.quit();)");
         if (mWriter != null) {
-            mWriter.forward(new WebSocketMessage.Close());
             mWriter.forward(new WebSocketMessage.Quit());
-            BefLog.v(TAG, "mWriter.forward(new WebSocketMessage.Close() , .Quit());");
+            BefLog.v(TAG, "mWriter.forward(new WebSocketMessage.Quit());");
         } else
-            BefLog.v(TAG, "mWriter was null (mWriter.forward(new WebSocketMessage.Close() , .Quit());)");
+            BefLog.v(TAG, "mWriter was null (mWriter.forward(new WebSocketMessage.Quit());)");
         try {
+            SocketCloser socketCloser = new SocketCloser();
+            socketCloser.start();
+            socketCloser.join();
             if (mWriterThread != null) {
                 mWriterThread.join();
                 BefLog.v(TAG, "mWriterThread joined");
             } else {
                 BefLog.d(TAG, "mWriter was null (join)");
             }
-            SocketCloser socketCloser = new SocketCloser();
-            socketCloser.start();
-            socketCloser.join();
             if (mReader != null) {
                 mReader.join();
                 BefLog.v(TAG, "mReader joined");

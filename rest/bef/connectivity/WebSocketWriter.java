@@ -62,6 +62,8 @@ public class WebSocketWriter extends Handler {
     /// The send buffer that holds data to send on socket.
     private final ByteBufferOutputStream mBuffer;
 
+    private boolean stopped;
+
 
     /**
      * Create new WebSockets background writer.
@@ -110,7 +112,11 @@ public class WebSocketWriter extends Handler {
      * @param message Message to send to master.
      */
     private void notify(Object message) {
-
+        if(stopped){
+            //should not come here
+            BefLog.w(TAG, "Befrest Writer Tried To Notify Master In Closed State!");
+            return;
+        }
         Message msg = mMaster.obtainMessage();
         msg.obj = message;
         mMaster.sendMessage(msg);
@@ -464,7 +470,7 @@ public class WebSocketWriter extends Handler {
         } else if (msg instanceof WebSocketMessage.Quit) {
 
             mLooper.quit();
-
+            stopped = true;
             BefLog.v(TAG, "ended");
 
             return;
