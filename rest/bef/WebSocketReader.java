@@ -14,11 +14,10 @@
  * limitations under the License.
  ******************************************************************************/
 
-package rest.bef.connectivity;
+package rest.bef;
 
 import android.os.Handler;
 import android.os.Message;
-import android.util.Log;
 import android.util.Pair;
 
 import java.io.UnsupportedEncodingException;
@@ -121,12 +120,13 @@ public class WebSocketReader extends Thread {
      *
      * @param message Message to send to master.
      */
-    protected void notify(Object message) {
+    protected void notify(WebSocketMessage.Message message) {
         if (mState == STATE_CLOSED) {
             //should not come here
             BefLog.w(TAG, "Befrest Reader Tried To Notify Master In Closed State!");
             return;
         }
+        message.senderId = hashCode();
         Message msg = mMaster.obtainMessage();
         msg.obj = message;
         mMaster.sendMessage(msg);
@@ -618,7 +618,7 @@ public class WebSocketReader extends Thread {
     /**
      * Consume data buffered in mFrameBuffer.
      */
-    private boolean consumeData() throws Exception {
+    private boolean consumeData() throws Exception{
 
         if (mState == STATE_OPEN || mState == STATE_CLOSING) {
             return processData();
@@ -656,7 +656,7 @@ public class WebSocketReader extends Thread {
                 if (len > 0) {
                     mFrameBuffer.put(readbuff, 0, len);
                     // process buffered data
-                    while (consumeData()) ;
+                    while (consumeData()) {};
                 } else if (mState == STATE_CLOSED) {
                     mStopped = true;
                 } else if (len < 0) {
@@ -688,11 +688,12 @@ public class WebSocketReader extends Thread {
             // wrap the exception and notify master
             notify(new WebSocketMessage.ConnectionLost());
         } catch (Exception e) {
-            Log.i(TAG, "exeption cath shod to reader");
+            BefLog.e(TAG, "unExpected Exception!");
             // wrap the exception and notify master
             notify(new WebSocketMessage.Error(e));
-
-        } finally {
+            //TODO report Crash
+        }
+        finally {
             mStopped = true;
         }
         BefLog.v(TAG, "ended");

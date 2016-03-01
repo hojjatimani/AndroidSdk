@@ -14,7 +14,7 @@
  * limitations under the License.
  ******************************************************************************/
 
-package rest.bef.connectivity;
+package rest.bef;
 
 import java.util.List;
 
@@ -28,6 +28,8 @@ public class WebSocketMessage {
 
    /// Base message class.
    public static class Message {
+
+      int senderId;
    }
 
    /// Quite background thread.
@@ -50,20 +52,6 @@ public class WebSocketMessage {
          mOrigin = null;
          mSubprotocols = null;
          mHeaderList = null;
-      }
-
-      ClientHandshake(String host, String path, String origin) {
-         mHost = host;
-         mPath = path;
-         mOrigin = origin;
-         mSubprotocols = null;
-      }
-
-      ClientHandshake(String host, String path, String origin, String[] subprotocols) {
-         mHost = host;
-         mPath = path;
-         mOrigin = origin;
-         mSubprotocols = subprotocols;
       }
    }
 

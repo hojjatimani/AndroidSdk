@@ -1,18 +1,25 @@
 /******************************************************************************
  * Copyright 2015-2016 Befrest
- * <p/>
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p/>
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
+
+/**
+ * If receiving befrest events through broadcast receiversdoes not meet
+ * your needs you can implement your custom push service class that
+ * extends this class and introduce it to befrest using
+ * {@code Befrest.getInstance(context).advancedSetCustomPushService(YourCustomPushService.class)}
+ */
 package rest.bef;
 
 import android.app.Service;
@@ -20,23 +27,22 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.res.Configuration;
+import android.net.ConnectivityManager;
 import android.net.wifi.WifiManager;
+import android.os.Bundle;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Parcelable;
+import android.util.Log;
+import android.widget.Toast;
 
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
-import rest.bef.connectivity.WebSocketConnection;
-import rest.bef.connectivity.WebSocketConnectionHandler;
-import rest.bef.connectivity.WebSocketException;
-
-
-public final class PushService extends Service {
-
+public class PushService extends Service {
     private static final String TAG = BefLog.TAG_PREF + "PushService";
 
     //events
@@ -47,30 +53,10 @@ public final class PushService extends Service {
     /* package */ static final String WAKEUP = "WAKEUP";
     /* package */ static final String SERVICE_STOPPED = "SERVICE_STOPPED";
     /* package */ static final String RETRY = "RETRY";
-    /* package */ static final String RESTART = "RESTART";
-
-    //pinging variables and constants
-    private static final int[] PING_INTERVAL = {120 * 1000, 300 * 1000, 480 * 1000};
-    private static final int PING_TIMEOUT = 5 * 1000;
-    private static final String PING_DATA_PREFIX = String.valueOf((int) (Math.random() * 9999));
-    private int currentPingId = 0;
-    private int prevSuccessfulPings;
-    private long lastPingSetTime; //last time a ping was set to be sent delayed
-    private Runnable sendPing = new Runnable() {
-        @Override
-        public void run() {
-            sendPing();
-        }
-    };
-    private Runnable restart = new Runnable() {
-        @Override
-        public void run() {
-            handleEvent(RESTART);
-        }
-    };
 
     //retrying variables and constants
-    private static final int[] RETRY_INTERVAL = {0, 25 * 1000, 60 * 1000, 240 * 1000, 600 * 1000};
+    private boolean retryInProgress;
+    private static final int[] RETRY_INTERVAL = {0, 2 * 1000, 5 * 1000, 10 * 1000, 18 * 1000 , 40 * 1000, 100 * 1000, 240 * 1000};
     private int prevFailedConnectTries;
     private Runnable retry = new Runnable() {
         @Override
@@ -85,35 +71,36 @@ public final class PushService extends Service {
     private static int batchSize;
     private boolean isBachReceiveMode;
 
-    //service wakeup variables and constants
-    private static final int PUSH_SYNC_TIMEOUT = 45 * 1000;
-    private static final int CONNECT_TIMEOUT = 45 * 1000;
-    private volatile static CountDownLatch latch;
-    private LocalWifiStateChangeReceiver wifiStateChangeListener;
-
-    //state controllers
-    private boolean retryInProgress;
-    private boolean restartInProgress;
-    private boolean connecting;
-
-    static final int START_SERVICE_AFTER_ILLEGAL_STOP_DELAY = 10 * 1000;
-    private boolean legalStop = false;
+    static final int START_SERVICE_AFTER_ILLEGAL_STOP_DELAY = 15 * 1000;
 
     private boolean authProblemSinceLastStart = false;
 
-    private List<Parcelable> receivedMessages = new ArrayList<>();
+    private List<BefrestMessage> receivedMessages = new ArrayList<>();
     private Befrest befrest;
-    private Handler handler = new Handler();
-    private WebSocketConnection mConnection;
+    private Handler handler;
+    private Handler mainThreadHandler = new Handler();
+    private BefrestConnection mConnection;
+    private HandlerThread befrestHandlerThread;
 
     private WebSocketConnectionHandler wscHandler;
 
-    private BroadcastReceiver screenStateBroadCastReceiver = new BroadcastReceiver() {
+    private BroadcastReceiver screenAndConnectionStateBroadCastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent.getAction().equals(Intent.ACTION_SCREEN_OFF))
-                Befrest.Util.lastScreenOnTime = System.currentTimeMillis();
-            else internalRefreshIfPossible();
+            String action = intent.getAction();
+            BefLog.v(TAG, "Broadcast Received. action: " + action);
+            switch (action){
+                case Intent.ACTION_SCREEN_ON:
+                    internalRefreshIfPossible();
+                    break;
+                case Intent.ACTION_SCREEN_OFF:
+                    Befrest.Util.lastScreenOnTime = System.currentTimeMillis();
+                    break;
+                case ConnectivityManager.CONNECTIVITY_ACTION:
+                    if(Befrest.Util.isConnectedToInternet(context))
+                        handleEvent(NETWORK_CONNECTED);
+                    else handleEvent(NETWORK_DISCONNECTED);
+            }
         }
     };
 
@@ -128,33 +115,90 @@ public final class PushService extends Service {
                 handler.postDelayed(finishBatchMode, getBatchTime());
             }
             if (receivedMsgs > 0)
-                sendBefrestBroadcast(BefrestPushReceiver.PUSH);
+                handleReceivedMessages();
+        }
+    };
+
+    Runnable connRefreshed = new Runnable(){
+        @Override
+        public void run() {
+            onConnectionRefreshed();
+        }
+    };
+
+    Runnable befrestConnected = new Runnable(){
+        @Override
+        public void run() {
+            onBefrestConnected();
+        }
+    };
+
+    Runnable authProblem = new Runnable() {
+        @Override
+        public void run() {
+            onAuthorizeProblem();
         }
     };
 
     @Override
-    public IBinder onBind(Intent intent) {
+    public final IBinder onBind(Intent intent) {
         return null;
     }
 
     @Override
-    public void onCreate() {
-        BefLog.v(TAG, "PushService:" + System.identityHashCode(this) + "  onCreate()");
+    public final boolean onUnbind(Intent intent) {
+        return super.onUnbind(intent);
+    }
+
+    @Override
+    public final void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+    }
+
+    @Override
+    public final void onLowMemory() {
+        super.onLowMemory();
+    }
+
+    @Override
+    public final void onRebind(Intent intent) {
+        super.onRebind(intent);
+    }
+
+    @Override
+    public final void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+    }
+
+    @Override
+    public final void onStart(Intent intent, int startId) {
+        super.onStart(intent, startId);
+    }
+
+    @Override
+    public final void onCreate() {
+        BefLog.v(TAG, "PushService: " + System.identityHashCode(this) + "  onCreate()");
         befrest = Befrest.getInstance(this);
-        mConnection = new WebSocketConnection();
+        createWebsocketConnectionHanlder();
+        befrestHandlerThread = new HandlerThread("BefrestThread");
+        befrestHandlerThread.start();
+        mConnection = new BefrestConnection(this, befrestHandlerThread.getLooper(), wscHandler, befrest.getSubscribeUri(), befrest.getSubscribeHeaders());
+        handler = new Handler(befrestHandlerThread.getLooper());
+        registerBroadCastReceivers();
+        super.onCreate();
+        System.gc();
+    }
+
+    private void createWebsocketConnectionHanlder() {
         wscHandler = new WebSocketConnectionHandler() {
             @Override
             public void onOpen() {
                 BefLog.i(TAG, "Befrest Connected");
-                connecting = false;
                 befrest.reportOnOpen();
-                prevFailedConnectTries = prevSuccessfulPings = 0;
-                authProblemSinceLastStart = true;
+                prevFailedConnectTries = 0;
                 befrest.prevAuthProblems = 0;
-                sendBefrestBroadcast(BefrestPushReceiver.BEFREST_CONNECTED);
-                cancelALLPendingIntents();
-                notifyConnectionRefreshedIfNeeded();
-                setNextPingToSendInFuture();
+                mainThreadHandler.post(befrestConnected);
+                cancelFutureRetry();
             }
 
             @Override
@@ -165,7 +209,7 @@ public final class PushService extends Service {
                         BefLog.i(TAG, "Befrest Push Received:: " + msg);
                         receivedMessages.add(msg);
                         if (!isBachReceiveMode)
-                            sendBefrestBroadcast(BefrestPushReceiver.PUSH);
+                            handleReceivedMessages();
                         break;
                     case BATCH:
                         BefLog.d(TAG, "Befrest Push Received:: " + msg.type + "  " + msg);
@@ -175,22 +219,18 @@ public final class PushService extends Service {
                         BefLog.v(TAG, "BATCH Mode Started for : " + batchTime + "ms");
                         handler.postDelayed(finishBatchMode, batchTime);
                         break;
-                    case PONG:
-                        BefLog.v(TAG, "Deprecated Pong Message!!:: " + msg.type + "  " + msg);
-                        PushService.this.onPong(msg.data);
                 }
             }
 
             @Override
-            public void onPong(byte[] payload) {
-                PushService.this.onPong(new String(payload, Charset.defaultCharset()));
+            public void onConnectionRefreshed() {
+                notifyConnectionRefreshedIfNeeded();
             }
 
             @Override
             public void onClose(int code, String reason) {
                 BefLog.d(TAG, "WebsocketConnectionHandler: " + System.identityHashCode(this) + "Connection lost. Code: " + code + ", Reason: " + reason);
                 BefLog.i(TAG, "Befrest Connection Closed. Will Try To Reconnect If Possible.");
-                connecting = false;
                 befrest.reportOnClose(PushService.this, code);
                 switch (code) {
                     case CLOSE_UNAUTHORIZED:
@@ -200,6 +240,7 @@ public final class PushService extends Service {
                     case CLOSE_CONNECTION_LOST:
                     case CLOSE_INTERNAL_ERROR:
                     case CLOSE_NORMAL:
+                    case CLOSE_CONNECTION_NOT_RESPONDING:
                     case CLOSE_PROTOCOL_ERROR:
                     case CLOSE_SERVER_ERROR:
                     case CLOSE_HANDSHAKE_TIME_OUT:
@@ -207,36 +248,37 @@ public final class PushService extends Service {
                 }
             }
         };
-        registerScreenStateBroadCastReceiver();
-        super.onCreate();
-        System.gc();
     }
 
     @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
+    public final int onStartCommand(Intent intent, int flags, int startId) {
         handleEvent(getIntentEvent(intent));
         return START_STICKY;
     }
 
     @Override
     public void onDestroy() {
-        BefLog.v(TAG, "PushService:" + System.identityHashCode(this) + " onDestroy()==================START===============");
-        cancelALLPendingIntents();
-        mConnection.disconnect();
-        wscHandler = null;
-        mConnection = null;
-        unRegisterScreenStateBroadCastReceiver();
+        BefLog.v(TAG, "PushService: " + System.identityHashCode(this) + "==================onDestroy()_START===============");
+        cancelFutureRetry();
+        mConnection.forward(new BefrestEvent(BefrestEvent.Type.DISCONNECT));
+        mConnection.forward(new BefrestEvent(BefrestEvent.Type.STOP));
+        try {
+            befrestHandlerThread.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        unRegisterBroadCastReceiver();
         super.onDestroy();
-        if (!legalStop)
+        if (befrest.isBefrestStarted)
             befrest.setStartServiceAlarm();
-        BefLog.v(TAG, "PushService onDestroy()==================END===============");
+        BefLog.v(TAG, "PushService==================onDestroy()_END===============");
     }
 
     @Override
-    public void onTaskRemoved(Intent rootIntent) {
+    public final void onTaskRemoved(Intent rootIntent) {
         BefLog.v(TAG, "PushService onTaskRemoved: ");
         super.onTaskRemoved(rootIntent);
-        if (!legalStop)
+        if (befrest.isBefrestStarted)
             befrest.setStartServiceAlarm();
     }
 
@@ -245,23 +287,18 @@ public final class PushService extends Service {
         switch (command) {
             case NETWORK_CONNECTED:
             case CONNECT:
-                connectIfNeeded();
+                connectIfNetworkAvailable();
                 break;
             case REFRESH:
                 refresh();
                 break;
-            case RESTART:
-                BefLog.d(TAG, "Befrest Connection Is Not Responding. Will Reconnect.");
-                restartInProgress = false;
-                reconnect();
-                break;
             case RETRY:
                 retryInProgress = false;
-                reconnect();
+                connectIfNetworkAvailable();
                 break;
             case NETWORK_DISCONNECTED:
-                cancelALLPendingIntents();
-                mConnection.disconnect();
+                cancelFutureRetry();
+                mConnection.forward(new BefrestEvent(BefrestEvent.Type.DISCONNECT));
                 break;
             case WAKEUP:
                 new WakeServiceUp().start();
@@ -270,15 +307,13 @@ public final class PushService extends Service {
                 handleServiceStopped();
                 break;
             default:
-                connectIfNeeded();
+                connectIfNetworkAvailable();
         }
     }
 
-    private void reconnect() {
-        BefLog.v(TAG, "call shouldConnect to log state");
-        shouldConnect();
-        mConnection.disconnect();
-        connectIfNeeded();
+    private void connectIfNetworkAvailable(){
+        if(Befrest.Util.isConnectedToInternet(this))
+            mConnection.forward(new BefrestEvent(BefrestEvent.Type.CONNECT));
     }
 
     private String getIntentEvent(Intent intent) {
@@ -299,22 +334,23 @@ public final class PushService extends Service {
         return "NOT_ASSIGNED";
     }
 
-    private void registerScreenStateBroadCastReceiver() {
+    private void registerBroadCastReceivers() {
         IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
         filter.addAction(Intent.ACTION_SCREEN_ON);
-        registerReceiver(screenStateBroadCastReceiver, filter);
+        filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
+        registerReceiver(screenAndConnectionStateBroadCastReceiver, filter);
     }
 
-    private void unRegisterScreenStateBroadCastReceiver() {
-        unregisterReceiver(screenStateBroadCastReceiver);
+    private void unRegisterBroadCastReceiver() {
+        unregisterReceiver(screenAndConnectionStateBroadCastReceiver);
     }
 
     private void scheduleReconnect() {
         boolean hasNetworkConnection = Befrest.Util.isConnectedToInternet(this);
-        BefLog.v(TAG, "scheduleReconnect() retryInProgress, restartInProgress, hasNetworkConnection", retryInProgress, restartInProgress, hasNetworkConnection);
-        if (retryInProgress || restartInProgress || !hasNetworkConnection)
+        BefLog.v(TAG, "scheduleReconnect() retryInProgress, hasNetworkConnection", retryInProgress, hasNetworkConnection);
+        if (retryInProgress || !hasNetworkConnection)
             return; //a retry or restart is already in progress or network in unavailable
-        cancelALLPendingIntents(); //just to be sure
+        cancelFutureRetry(); //just to be sure
         prevFailedConnectTries++;
         int interval = getNextReconnectInterval();
         BefLog.d(TAG, "Befrest Will Retry To Connect In " + interval + "ms");
@@ -324,10 +360,10 @@ public final class PushService extends Service {
 
     private void handleServiceStopped() {
         if (befrest.isBefrestStarted) {
-            if (!(retryInProgress || restartInProgress))
-                connectIfNeeded();
+            if (!(retryInProgress))
+                connectIfNetworkAvailable();
         } else {
-            legalStop = true;
+//            legalStop = true;
             stopSelf();
         }
     }
@@ -335,11 +371,10 @@ public final class PushService extends Service {
     private void handleAthorizeProblem() {
         BefLog.i(TAG, "Befrest On Authorize Problem!");
         if (befrest.prevAuthProblems == 0)
-            sendBefrestBroadcast(BefrestPushReceiver.UNAUTHORIZED);
+            mainThreadHandler.post(authProblem);
         else if (authProblemSinceLastStart)
-            sendBefrestBroadcast(BefrestPushReceiver.UNAUTHORIZED);
-
-        cancelALLPendingIntents();
+            mainThreadHandler.post(authProblem);
+        cancelFutureRetry();
         handler.postDelayed(retry, befrest.getSendOnAuthorizeBroadcastDelay());
         retryInProgress = true;
         befrest.prevAuthProblems++;
@@ -348,97 +383,17 @@ public final class PushService extends Service {
 
     private void notifyConnectionRefreshedIfNeeded() {
         if (befrest.refreshIsRequested) {
-            sendBefrestBroadcast(BefrestPushReceiver.CONNECTION_REFRESHED);
+            mainThreadHandler.post(connRefreshed);
             befrest.refreshIsRequested = false;
             BefLog.i(TAG, "Befrest Refreshed");
         }
     }
 
-    private void connectIfNeeded() {
-        BefLog.v(TAG, "connectIfNeeded()");
-        if (shouldConnect())
-            try {
-                cancelALLPendingIntents();
-                connecting = true;
-                BefLog.i(TAG, "Befrest Is Connecting ...");
-                mConnection.connect(befrest.getSubscribeUri(), wscHandler, befrest.getSubscribeHeaders());
-            } catch (WebSocketException e) {
-                BefLog.e(TAG, e);
-            }
-    }
-
-    private boolean shouldConnect() {
-        BefLog.v(TAG, "shouldConnect %%%%%%%%%%%START%%%%%%%%%%%%");
-        BefLog.v(TAG, "mConnection: " + System.identityHashCode(mConnection));
-        boolean isAleadyConnected = mConnection.isConnected();
-        boolean isConnectedToInternet = Befrest.Util.isConnectedToInternet(this);
-        BefLog.v(TAG, "shouldConnect() isAleadyConnected, isConnectedToInternet, connecting", isAleadyConnected, isConnectedToInternet, connecting);
-        BefLog.v(TAG, "shouldConnect %%%%%%%%%%%END%%%%%%%%%%%%%");
-        return !isAleadyConnected && isConnectedToInternet && !connecting;
-    }
-
-    private void sendBefrestBroadcast(int type) {
-        Intent intent = new Intent(BefrestPushReceiver.ACTION_BEFREST_PUSH).putExtra(BefrestPushReceiver.BROADCAST_TYPE, type);
-        if (type == BefrestPushReceiver.PUSH) {
-            Parcelable[] data = new BefrestMessage[receivedMessages.size()];
-            intent.putExtra(Befrest.Util.KEY_MESSAGE_PASSED, receivedMessages.toArray(data));
-            receivedMessages.clear();
-            revisePinging();
-        }
-        String permission = Befrest.Util.getBroadcastSendingPermission(this);
-        long now = System.nanoTime();
-        intent.putExtra(BefrestPushReceiver.KEY_TIME_SENT, "" + now);
-        sendBroadcast(intent, permission);
-        befrest.reportBroadcastSent(now + ":" + type);
-        BefLog.v(TAG, "broadcast sent:: " + type + " permission:" + permission);
-    }
-
-    private void sendPing() {
-        handler.postDelayed(restart, PING_TIMEOUT);
-        restartInProgress = true;
-        currentPingId = (currentPingId + 1) % 5;
-        String payload = PING_DATA_PREFIX + currentPingId;
-        BefLog.d(TAG, "Sending Ping ...");
-        mConnection.sendPing(payload.getBytes(Charset.defaultCharset()));
-    }
-
-    private void onPong(String pongData) {
-        boolean isValid = isValidPong(pongData);
-        BefLog.d(TAG, "onPong(" + pongData + ") " + (isValid ? "valid" : "invalid!"));
-        if (!isValid) return;
-        cancelUpcommingRestart();
-        prevSuccessfulPings++;
-        setNextPingToSendInFuture();
-        notifyConnectionRefreshedIfNeeded();
-    }
-
-    private boolean isValidPong(String pongData) {
-        return (PING_DATA_PREFIX + currentPingId).equals(pongData);
-    }
-
-    private void cancelALLPendingIntents() {
-        cancelFuturePing();
-        cancelFutureRetry();
-        cancelUpcommingRestart();
-    }
-
-    private void cancelFuturePing() {
-        BefLog.v(TAG, "cancelFuturePing()");
-        handler.removeCallbacks(sendPing);
-    }
-
-    private void cancelFutureRetry() {
+    private  void cancelFutureRetry() {
         BefLog.v(TAG, "cancelFutureRetry()");
         handler.removeCallbacks(retry);
         retryInProgress = false;
     }
-
-    private void cancelUpcommingRestart() {
-        BefLog.v(TAG, "cancelUpcommingRestart()");
-        handler.removeCallbacks(restart);
-        restartInProgress = false;
-    }
-
 
     private int getNextReconnectInterval() {
         return RETRY_INTERVAL[prevFailedConnectTries < RETRY_INTERVAL.length ? prevFailedConnectTries : RETRY_INTERVAL.length - 1];
@@ -449,35 +404,12 @@ public final class PushService extends Service {
         return (requiredTime < BATCH_MODE_TIMEOUT ? requiredTime : BATCH_MODE_TIMEOUT);
     }
 
-    private int getPingInterval() {
-        return PING_INTERVAL[prevSuccessfulPings < PING_INTERVAL.length ? prevSuccessfulPings : PING_INTERVAL.length - 1];
-    }
-
-    private void revisePinging() {
-        if (restartInProgress || System.currentTimeMillis() - lastPingSetTime < getPingInterval() / 2)
-            return;
-        prevSuccessfulPings++;
-        setNextPingToSendInFuture();
-        BefLog.v(TAG, "Befrest Pinging Revised");
-    }
-
     private void refresh() {
-        if (connecting) {
-            BefLog.v(TAG, "Befrest is connecting right now!");
-        } else if (retryInProgress) {
+        if(retryInProgress) {
             cancelFutureRetry();
             prevFailedConnectTries = 0;
-            handler.post(retry);
-        } else if (restartInProgress) {
-            cancelUpcommingRestart();
-            handler.post(restart);
-        } else if (shouldConnect()) {
-            cancelALLPendingIntents();
-            connectIfNeeded();
-        } else {
-            prevSuccessfulPings = 0;
-            setNextPingToSendInFuture(0);
         }
+        mConnection.forward(new BefrestEvent(BefrestEvent.Type.REFRESH));
     }
 
     private void internalRefreshIfPossible() {
@@ -486,19 +418,74 @@ public final class PushService extends Service {
             refresh();
     }
 
-    private void setNextPingToSendInFuture() {
-        setNextPingToSendInFuture(getPingInterval());
+    private void handleReceivedMessages(){
+        final ArrayList<BefrestMessage> msgs = new ArrayList<>(receivedMessages.size());
+        msgs.addAll(receivedMessages);
+        receivedMessages.clear();
+        mainThreadHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                onPushReceived(msgs);
+            }
+        });
     }
 
-    private void setNextPingToSendInFuture(int interval) {
-        cancelFuturePing(); //cancel any previous ping set
-        BefLog.v(TAG, "setNextPingToSendInFuture()  interval : " + interval);
-        lastPingSetTime = System.currentTimeMillis();
-        handler.postDelayed(sendPing, interval);
+    /**
+     * Called when new push messages are received.
+     * The method is called in main thread of the application (UiThread)
+     *
+     * call super() if you want to receive this callback also in your broadcast receivers.
+     *
+     * @param messages messages
+     */
+    protected void onPushReceived(ArrayList<BefrestMessage> messages){
+        Parcelable[] data = new BefrestMessage[messages.size()];
+        Bundle b = new Bundle(1);
+        b.putParcelableArray(Befrest.Util.KEY_MESSAGE_PASSED, messages.toArray(data));
+        befrest.sendBefrestBroadcast(this, BefrestPushReceiver.PUSH , b);
+
     }
 
-    private class WakeServiceUp extends Thread {
+    /**
+     * Called when there is a problem with your Authentication token. The Service encounters authorization errors while trying to connect to Befrest servers.
+     * The method is called in main thread of the application (UiThread)
+     *
+     * call super() if you want to receive this callback also in your broadcast receivers.
+     *
+     */
+    protected void onAuthorizeProblem() {
+        befrest.sendBefrestBroadcast(this, BefrestPushReceiver.UNAUTHORIZED, null);
+    }
+
+    /**
+     * Connection Refreshed! This method is called when Befrest refreshes its connection to server in respond to a refresh request from user
+     * The method is called in main thread of the application (UiThread)
+     *
+     * call super() if you want to receive this callback also in your broadcast receivers.
+     */
+    protected void onConnectionRefreshed() {
+        befrest.sendBefrestBroadcast(this, BefrestPushReceiver.CONNECTION_REFRESHED , null);
+    }
+
+    /**
+     * is called when Befrest Connects to its server.
+     * The method is called in main thread of the application (UiThread)
+     *
+     * call super() if you want to receive this callback also in your broadcast receivers.
+     */
+    protected void onBefrestConnected() {
+        befrest.sendBefrestBroadcast(this, BefrestPushReceiver.BEFREST_CONNECTED , null);
+    }
+
+
+    private final class WakeServiceUp extends Thread {
         private static final String TAG = "WakeServiceUp";
+
+        //service wakeup variables and constants
+        private static final int PUSH_SYNC_TIMEOUT = 45 * 1000;
+        private static final int CONNECT_TIMEOUT = 45 * 1000;
+        private volatile CountDownLatch latch;
+        private LocalWifiStateChangeReceiver wifiStateChangeListener;
 
         public WakeServiceUp() {
             super(TAG);
@@ -538,46 +525,46 @@ public final class PushService extends Service {
                 BefLog.e(TAG, e);
             }
         }
-    }
 
-    private void waitForConnection() {
-        try {
-            latch = new CountDownLatch(1);
-            new Handler().postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    if (latch.getCount() == 1) {
-                        BefLog.v(TAG, "Wifi Connect Timeout!");
-                        latch.countDown();
+        private void waitForConnection() {
+            try {
+                latch = new CountDownLatch(1);
+                new Handler().postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (latch.getCount() == 1) {
+                            BefLog.v(TAG, "Wifi Connect Timeout!");
+                            latch.countDown();
+                        }
                     }
-                }
-            }, CONNECT_TIMEOUT);
-            BefLog.v(TAG, "Waiting For Wifi to Connect ...");
-            latch.await();
-            BefLog.v(TAG, "Finish Waiting For Wifi Connection");
-        } catch (InterruptedException e) {
-            BefLog.v(TAG, "waiting interrupted");
-            BefLog.e(TAG, e);
+                }, CONNECT_TIMEOUT);
+                BefLog.v(TAG, "Waiting For Wifi to Connect ...");
+                latch.await();
+                BefLog.v(TAG, "Finish Waiting For Wifi Connection");
+            } catch (InterruptedException e) {
+                BefLog.v(TAG, "waiting interrupted");
+                BefLog.e(TAG, e);
+            }
         }
-    }
 
-    private void startMonitoringWifiState() {
-        if (wifiStateChangeListener == null)
-            wifiStateChangeListener = new LocalWifiStateChangeReceiver();
-        registerReceiver(wifiStateChangeListener, new IntentFilter(WifiManager.NETWORK_STATE_CHANGED_ACTION));
-    }
+        private void startMonitoringWifiState() {
+            if (wifiStateChangeListener == null)
+                wifiStateChangeListener = new LocalWifiStateChangeReceiver();
+            registerReceiver(wifiStateChangeListener, new IntentFilter(WifiManager.NETWORK_STATE_CHANGED_ACTION));
+        }
 
-    private void stopMonitoringWifiState() {
-        if (wifiStateChangeListener != null) unregisterReceiver(wifiStateChangeListener);
-    }
+        private void stopMonitoringWifiState() {
+            if (wifiStateChangeListener != null) unregisterReceiver(wifiStateChangeListener);
+        }
 
-    private final class LocalWifiStateChangeReceiver extends BroadcastReceiver {
-        @Override
-        public void onReceive(Context context, Intent i) {
-            if (i.getAction().equals(WifiManager.NETWORK_STATE_CHANGED_ACTION)) {
-                if (Befrest.Util.isWifiConnectedOrConnecting(context))
-                    if (latch != null && latch.getCount() == 1)
-                        latch.countDown();
+        private final class LocalWifiStateChangeReceiver extends BroadcastReceiver {
+            @Override
+            public void onReceive(Context context, Intent i) {
+                if (i.getAction().equals(WifiManager.NETWORK_STATE_CHANGED_ACTION)) {
+                    if (Befrest.Util.isWifiConnectedOrConnecting(context))
+                        if (latch != null && latch.getCount() == 1)
+                            latch.countDown();
+                }
             }
         }
     }

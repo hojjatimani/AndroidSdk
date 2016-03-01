@@ -30,7 +30,7 @@ public class WakeupAlarmReceiver extends BroadcastReceiver {
         BefLog.d(TAG, "Befrest Wakeup Time!" + action);
         if (action.equals(ACTION_WAKEUP)) {
             Befrest.Util.acquireWakeLock(context);
-            context.startService(new Intent(context, PushService.class).putExtra(PushService.WAKEUP, true));
+            context.startService(new Intent(context, Befrest.getInstance(context).pushService).putExtra(PushService.WAKEUP, true));
         }
     }
 }

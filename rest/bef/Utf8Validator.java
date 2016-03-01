@@ -14,7 +14,7 @@
  * limitations under the License.
  ******************************************************************************/
 
-package rest.bef.connectivity;
+package rest.bef;
 
 
 /**

@@ -14,7 +14,7 @@
  * limitations under the License.
  ******************************************************************************/
 
-package rest.bef.connectivity;
+package rest.bef;
 
 import android.os.Handler;
 import android.os.Looper;
@@ -99,7 +99,6 @@ public class WebSocketWriter extends Handler {
      *                this class).
      */
     public void forward(Object message) {
-
         Message msg = obtainMessage();
         msg.obj = message;
         sendMessage(msg);
@@ -111,12 +110,13 @@ public class WebSocketWriter extends Handler {
      *
      * @param message Message to send to master.
      */
-    private void notify(Object message) {
+    private void notify(WebSocketMessage.Message message) {
         if(stopped){
             //should not come here
             BefLog.w(TAG, "Befrest Writer Tried To Notify Master In Closed State!");
             return;
         }
+        message.senderId = hashCode();
         Message msg = mMaster.obtainMessage();
         msg.obj = message;
         mMaster.sendMessage(msg);
@@ -420,11 +420,17 @@ public class WebSocketWriter extends Handler {
 
             // wrap the exception and notify master
             notify(new WebSocketMessage.ConnectionLost());
+        }catch (WebSocketException e){
+            BefLog.v(TAG, "run() : WebSocketException (" + e.toString() + ")");
+            notify(new WebSocketMessage.ConnectionLost());
+        }catch (IOException e){
+            BefLog.v(TAG, "run() : IOException (" + e.toString() + ")");
+            notify(new WebSocketMessage.ConnectionLost());
         } catch (Exception e) {
-            Log.i(TAG, "exeption cath shod to reader");
-
+            Log.e(TAG, "unExpected Exception!");
             // wrap the exception and notify master
             notify(new WebSocketMessage.Error(e));
+            //TODO report crash
         }
     }
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  ******************************************************************************/
 
-package rest.bef.connectivity;
+package rest.bef;
 
 /**
  * WebSockets event handler. Users will usually provide an instance of a class
@@ -66,10 +66,9 @@ public class WebSocketConnectionHandler implements WebSocket.ConnectionHandler {
     }
 
     /**
-     * Fired when a pong message has been received.
+     * Fired when connection was refreshed
      *
-     * @param payload Binary message payload or null (empty payload).
      */
-    public void onPong(byte[] payload) {
+    public void onConnectionRefreshed() {
     }
 }

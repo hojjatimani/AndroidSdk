@@ -1,12 +1,12 @@
 /******************************************************************************
  * Copyright 2015-2016 Befrest
- * <p/>
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p/>
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,7 +14,7 @@
  * limitations under the License.
  ******************************************************************************/
 
-package rest.bef.connectivity;
+package rest.bef;
 
 public interface WebSocket {
 
@@ -64,6 +64,11 @@ public interface WebSocket {
          */
         public static final int CLOSE_UNAUTHORIZED = 8;
 
+        /**
+         * Connection not Responding. (ping send but pong not received)
+         */
+        public static final int CLOSE_CONNECTION_NOT_RESPONDING = 9;
+
 
         /**
          * Fired when the WebSockets connection has been established.
@@ -106,9 +111,8 @@ public interface WebSocket {
         /**
          * Fired when a pong message has been received.
          *
-         * @param payload Binary message payload or null (empty payload).
          */
-        public void onPong(byte[] payload);
+        public void onConnectionRefreshed();
     }
 
     public void connect(String wsUri, ConnectionHandler wsHandler) throws WebSocketException;

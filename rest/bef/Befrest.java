@@ -1,4 +1,4 @@
-hojat/******************************************************************************
+/******************************************************************************
  * Copyright 2015-2016 Befrest
  * <p/>
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,6 +28,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Base64;
@@ -36,11 +37,8 @@ import android.view.Display;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
-
-import rest.bef.connectivity.NameValuePair;
 
 /**
  * Main class to interact with Befrest service.
@@ -50,18 +48,39 @@ public final class Befrest {
     private static volatile Befrest instance;
 
     private Befrest(Context context) {
-        this.context = context.getApplicationContext();
-        SharedPreferences prefs = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
-        uId = prefs.getLong(PREF_U_ID, -1);
-        chId = prefs.getString(PREF_CH_ID, null);
-        auth = prefs.getString(PREF_AUTH, null);
-        topics = prefs.getString(PREF_TOPICS, "");
-        logLevel = prefs.getInt(PREF_LOG_LEVEL, LOG_LEVEL_DEFAULT);
-        checkInSleep = prefs.getBoolean(PREF_CHECK_IN_DEEP_SLEEP, false);
-        isBefrestStarted = prefs.getBoolean(PREF_IS_SERVICE_STARTED, false);
+        try {
+            this.context = context.getApplicationContext();
+            SharedPreferences prefs = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
+            uId = prefs.getLong(PREF_U_ID, -1);
+            chId = prefs.getString(PREF_CH_ID, null);
+            auth = prefs.getString(PREF_AUTH, null);
+            topics = prefs.getString(PREF_TOPICS, "");
 
+            logLevel = prefs.getInt(PREF_LOG_LEVEL, LOG_LEVEL_DEFAULT);
+            checkInSleep = prefs.getBoolean(PREF_CHECK_IN_DEEP_SLEEP, false);
+            isBefrestStarted = prefs.getBoolean(PREF_IS_SERVICE_STARTED, false);
+            loadPushServiceData(prefs);
+            //for test
+            loadTestAnomalyData(prefs);
+        } catch (Exception e) {
+            //TODo report
+            throw e;
+        }
+    }
 
-        //for test
+    private void loadPushServiceData(SharedPreferences prefs) {
+        String customPushServicName = prefs.getString(PREF_CUSTOM_PUSH_SERVICE_NAME, null);
+        if (customPushServicName == null) {
+            pushService = PushService.class;
+        } else
+            try {
+                pushService = Class.forName(customPushServicName);
+            } catch (ClassNotFoundException e) {
+                BefLog.e(TAG, e);
+            }
+    }
+
+    private void loadTestAnomalyData(SharedPreferences prefs) {
         reportedContinuousCloses = prefs.getInt(PREF_CONTINUOUS_CLOSES, 0);
         continuousClosesTypes = prefs.getString(PREF_CONTINUOUS_CLOSES_TYPES, "");
 
@@ -82,6 +101,8 @@ public final class Befrest {
     }
 
     Context context;
+    Class<?> pushService;
+
     long uId;
     String chId;
     String auth;
@@ -100,7 +121,6 @@ public final class Befrest {
     private int reportedContinuousCloses;
     private String continuousClosesTypes;
 
-    private String pingUrl;
     private String subscribeUrl;
     private List<NameValuePair> subscribeHeaders;
     private NameValuePair authHeader;
@@ -145,6 +165,7 @@ public final class Befrest {
     private static final String PREF_TOPICS = "PREF_TOPICS";
     private static final String PREF_IS_SERVICE_STARTED = "PREF_IS_SERVICE_STARTED";
     private static final String PREF_LOG_LEVEL = "PREF_LOG_LEVEL";
+    public static final String PREF_CUSTOM_PUSH_SERVICE_NAME = "PREF_CUSTOM_PUSH_SERVICE_NAME";
     public static final String PREF_CONTINUOUS_CLOSES = "PREF_CONTINUOUS_CLOSES";
     public static final String PREF_CONTINUOUS_CLOSES_TYPES = "PREF_CONTINUOUS_CLOSES_TYPES";
     public static final String PREF_BROADCAST_ANOMALY_INFO = "PREF_BROADCAST_ANOMALY_INFO";
@@ -166,6 +187,24 @@ public final class Befrest {
             this.chId = chId;
             clearTempData();
             saveToPrefs(context, uId, auth, chId);
+        }
+        return this;
+    }
+
+    /**
+     * @param customPushService that befrest will start in background. This class must extend rest.bef.PushService
+     * @return
+     */
+    public Befrest advancedSetCustomPushService(Class<? extends PushService> customPushService) {
+        if (customPushService == null)
+            throw new IllegalArgumentException("invalid custom push service!");
+        else if (isBefrestStarted && !customPushService.equals(pushService)) {
+            throw new IllegalArgumentException("can not set custom push service after starting befrest!");
+        } else {
+            this.pushService = customPushService;
+            SharedPreferences.Editor editor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
+            editor.putString(PREF_CUSTOM_PUSH_SERVICE_NAME, customPushService.getName());
+            editor.commit();
         }
         return this;
     }
@@ -233,11 +272,11 @@ public final class Befrest {
         BefLog.i(TAG, "starting befrest");
         if (uId < 0 || chId == null || chId.length() < 1)
             throw new IllegalStateException("uId and chId are not properly defined!");
-        if (connectionDataChangedSinceLastStart)
-            context.stopService(new Intent(context, PushService.class)); // stop service if is running with old credentials
-        context.startService(new Intent(context, PushService.class).putExtra(PushService.CONNECT, true));
-        connectionDataChangedSinceLastStart = false;
         setBefrestStarted(true);
+        if (connectionDataChangedSinceLastStart)
+            context.stopService(new Intent(context, pushService)); // stop service if is running with old credentials
+        context.startService(new Intent(context, pushService).putExtra(PushService.CONNECT, true));
+        connectionDataChangedSinceLastStart = false;
         Util.enableConnectivityChangeListener(context);
         if (checkInSleep) scheduleWakeUP();
     }
@@ -247,10 +286,10 @@ public final class Befrest {
      * You can call start to run the service later.
      */
     public void stop() {
-        context.stopService(new Intent(context, PushService.class));
+        setBefrestStarted(false);
+        context.stopService(new Intent(context, pushService));
         cancelWakeUP();
         Util.disableConnectivityChangeListener(context);
-        setBefrestStarted(false);
         BefLog.i(TAG, "Befrest Service Stopped.");
     }
 
@@ -333,7 +372,7 @@ public final class Befrest {
             return true;
         refreshIsRequested = true;
         lastAcceptedRefreshRequestTime = System.currentTimeMillis();
-        context.startService(new Intent(context, PushService.class).putExtra(PushService.REFRESH, true));
+        context.startService(new Intent(context, pushService).putExtra(PushService.REFRESH, true));
         return true;
     }
 
@@ -408,6 +447,23 @@ public final class Befrest {
         BefLog.d(TAG, "Befrest Scheduled To Wake Device Up.");
     }
 
+    void setStartServiceAlarm() {
+        AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(context, pushService).putExtra(PushService.SERVICE_STOPPED, true);
+        PendingIntent pi = PendingIntent.getService(context, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        alarmMgr.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + PushService.START_SERVICE_AFTER_ILLEGAL_STOP_DELAY, pi);
+        BefLog.d(TAG, "Befrest Scheduled To Start Service In " + PushService.START_SERVICE_AFTER_ILLEGAL_STOP_DELAY + "ms");
+    }
+
+    void cancelStartServiceAlarm() {
+        AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(context, pushService).putExtra(PushService.SERVICE_STOPPED, true);
+        PendingIntent pi = PendingIntent.getService(context, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        alarmMgr.cancel(pi);
+        pi.cancel();
+        BefLog.d(TAG, "Starting Service Canceled");
+    }
+
     private void cancelWakeUP() {
         AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         Intent intent = new Intent(context, WakeupAlarmReceiver.class);
@@ -421,7 +477,6 @@ public final class Befrest {
     private void clearTempData() {
         subscribeUrl = null;
         subscribeHeaders = null;
-        pingUrl = null;
         authHeader = null;
         connectionDataChangedSinceLastStart = true;
     }
@@ -449,14 +504,6 @@ public final class Befrest {
         return authHeader;
     }
 
-    void setStartServiceAlarm() {
-        AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        Intent intent = new Intent(context, PushService.class).putExtra(PushService.SERVICE_STOPPED, true);
-        PendingIntent pi = PendingIntent.getService(context, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-        alarmMgr.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + PushService.START_SERVICE_AFTER_ILLEGAL_STOP_DELAY, pi);
-        BefLog.d(TAG, "Befrest Scheduled To Start Service In " + PushService.START_SERVICE_AFTER_ILLEGAL_STOP_DELAY + "ms");
-    }
-
     int getSendOnAuthorizeBroadcastDelay() {
         return AuthProblemBroadcastDelay[prevAuthProblems < AuthProblemBroadcastDelay.length ? prevAuthProblems : AuthProblemBroadcastDelay.length - 1];
     }
@@ -471,22 +518,23 @@ public final class Befrest {
         editor.commit();
         //TODO 3 is for test!
         if (reportedContinuousCloses == 3 || reportedContinuousCloses == 10) {
-            sendAnomalyBroadcast(context, continuousClosesTypes);
+            Bundle b = new Bundle(1);
+            b.putString(Util.KEY_MESSAGE_PASSED, continuousClosesTypes);
+            sendBefrestBroadcast(context, BefrestPushReceiver.Anomaly, b);
         } else if (reportedContinuousCloses == 50) {
             clearAnomalyHistory();
         }
     }
 
-    void sendAnomalyBroadcast(Context context, String data) {
-        Intent intent = new Intent(BefrestPushReceiver.ACTION_BEFREST_PUSH);
-        intent.putExtra(BefrestPushReceiver.BROADCAST_TYPE, BefrestPushReceiver.Anomaly);
-        intent.putExtra(Util.KEY_MESSAGE_PASSED, data);
-        String permission = Util.getBroadcastSendingPermission(context);
-        long now = System.nanoTime();
+    void sendBefrestBroadcast(Context context, int type, Bundle extras) {
+        Intent intent = new Intent(BefrestPushReceiver.ACTION_BEFREST_PUSH).putExtra(BefrestPushReceiver.BROADCAST_TYPE, type);
+        if (extras != null) intent.putExtras(extras);
+        String permission = Befrest.Util.getBroadcastSendingPermission(context);
+        long now = System.currentTimeMillis();
         intent.putExtra(BefrestPushReceiver.KEY_TIME_SENT, "" + now);
-        context.sendBroadcast(intent, permission);
-        reportBroadcastSent(now + ":" + BefrestPushReceiver.Anomaly);
-        BefLog.v(TAG, "Anomaly Broadcast Sent. permission:" + permission);
+        context.getApplicationContext().sendBroadcast(intent, permission);
+        reportBroadcastSent(now + ":" + type);
+        BefLog.v(TAG, "broadcast sent::    type: " + type + "      permission:" + permission);
     }
 
     void reportOnOpen() {
@@ -611,9 +659,28 @@ public final class Befrest {
          * Is device connected to Internet?
          */
         static boolean isConnectedToInternet(Context context) {
-            ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-            NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
-            return activeNetwork != null && activeNetwork.isConnectedOrConnecting();
+            try {
+                ConnectivityManager cm = (ConnectivityManager) context.getApplicationContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+                NetworkInfo netInfo = cm.getActiveNetworkInfo();
+                if (netInfo != null && (netInfo.isConnectedOrConnecting() || netInfo.isAvailable())) {
+                    return true;
+                }
+
+                netInfo = cm.getNetworkInfo(ConnectivityManager.TYPE_MOBILE);
+
+                if (netInfo != null && netInfo.isConnectedOrConnecting()) {
+                    return true;
+                } else {
+                    netInfo = cm.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+                    if (netInfo != null && netInfo.isConnectedOrConnecting()) {
+                        return true;
+                    }
+                }
+            } catch (Exception e) {
+                BefLog.e(TAG, e);
+                return true;
+            }
+            return false;
         }
 
         static boolean isWifiConnectedOrConnecting(Context context) {

@@ -14,7 +14,7 @@
  * limitations under the License.
  ******************************************************************************/
 
-package rest.bef.connectivity;
+package rest.bef;
 
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
@@ -34,14 +33,11 @@ import javax.net.ssl.HandshakeCompletedEvent;
 import javax.net.ssl.HandshakeCompletedListener;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
-
 import rest.bef.BefLog;
-import rest.bef.Befrest;
 
 
 public class WebSocketConnection implements WebSocket {
     private static final String TAG = BefLog.TAG_PREF + "WebSocketConnection";
-
 
     protected Handler mMasterHandler;
     protected WebSocketReader mReader;
@@ -59,6 +55,8 @@ public class WebSocketConnection implements WebSocket {
     private WebSocket.ConnectionHandler mWsHandler;
     protected WebSocketOptions mOptions;
     private boolean connected;
+
+
 
     private Runnable disconnectIfHandshakeTimeOut = new Runnable() {
         @Override
@@ -79,7 +77,6 @@ public class WebSocketConnection implements WebSocket {
             if (mWsScheme.equals("wss")) {
                 SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
 //                SSLSocket secSoc = (SSLSocket) factory.createSocket(mWsHost, mWsPort);
-
 
                 SSLSocket secSoc = (SSLSocket) factory.createSocket();
                 secSoc.setUseClientMode(true);
@@ -467,9 +464,9 @@ public class WebSocketConnection implements WebSocket {
                 WebSocketMessage.Pong pong = (WebSocketMessage.Pong) msg.obj;
 
                 if (wsConnection.mWsHandler != null) {
-                    wsConnection.mWsHandler.onPong(pong.mPayload);
+//                    wsConnection.mWsHandler.onPong(pong.mPayload);
                 } else {
-                    BefLog.w(TAG, "could not call onPong() .. handler already NULL");
+                    BefLog.w(TAG, "could not call onConnectionRefreshed() .. handler already NULL");
                 }
 
             } else if (msg.obj instanceof WebSocketMessage.Close) {

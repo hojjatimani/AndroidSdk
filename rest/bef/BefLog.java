@@ -31,8 +31,8 @@ import java.util.Locale;
 public final class BefLog {
     public static final String TAG_PREF = "BEFREST-";
     private static final String TAG = TAG_PREF + "BefLog";
-    private static final boolean LogToFile = false;
-    private static final String SDK_VERSION_NAME = "1.0.12";
+    private static final boolean LogToFile = true;
+    private static final String SDK_VERSION_NAME = "1.1.0-test";
 
     private OutputStreamWriter streamWriter = null;
     private SimpleDateFormat dateFormat;
@@ -64,7 +64,7 @@ public final class BefLog {
         }
         dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault());
         try {
-            String LogsDir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/BefrestLogs_" + SDK_VERSION_NAME;
+            String LogsDir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/BefrestLogs/" + SDK_VERSION_NAME;
             Log.v("BefLog File", "path : " + LogsDir);
             File dir = new File(LogsDir);
             dir.mkdirs();
@@ -79,7 +79,6 @@ public final class BefLog {
             streamWriter = new OutputStreamWriter(stream);
             streamWriter.write("---start log " + dateFormat.format(System.currentTimeMillis()) + " (Pid:" + Process.myPid() + ")-----\n");
             streamWriter.flush();
-//            l2("---start log " + dateFormat.format(System.currentTimeMillis()) + " (Pid:" + Process.myPid() + ")-----\n");
         } catch (Exception e) {
             e.printStackTrace();
         }

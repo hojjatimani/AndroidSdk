@@ -1,12 +1,12 @@
 /******************************************************************************
  * Copyright 2015-2016 Oddrun
- * <p>
+ * <p/>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p>
+ * <p/>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -41,7 +41,7 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
     public final void onReceive(Context context, Intent intent) {
         int type = intent.getIntExtra(BROADCAST_TYPE, -1);
         String timeSent = intent.getStringExtra(KEY_TIME_SENT);
-        Befrest.getInstance(context).reportBroadcastReceived(context, timeSent+":"+type);
+        Befrest.getInstance(context).reportBroadcastReceived(context, timeSent + ":" + type);
         BefLog.v(TAG, "Broadcast Received :: type: " + type + "      timeSent:" + timeSent);
         switch (type) {
             case PUSH:
@@ -103,6 +103,6 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
     public void onBefrestConnected(Context context) {
     }
 
-    public void onAnomaly(Context context, String data){
+    public void onAnomaly(Context context, String data) {
     }
 }
