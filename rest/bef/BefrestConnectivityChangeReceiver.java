@@ -20,6 +20,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.ConnectivityManager;
 
+import java.lang.reflect.Proxy;
+
 /**
  * Created by ehsan on 11/24/2015.
  */
@@ -30,9 +32,9 @@ public final class BefrestConnectivityChangeReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
         BefLog.v(TAG, "Broadcast received: action=" + action);
-        Class<?> pushService = Befrest.getInstance(context).pushService;
+        Class<?> pushService = ((BefrestInvocHandler) Proxy.getInvocationHandler(BefrestFactory.getInternalInstance(context))).obj.pushService;
         if (action.equals(ConnectivityManager.CONNECTIVITY_ACTION))
-            if (Befrest.Util.isConnectedToInternet(context))
+            if (BefrestImpl.Util.isConnectedToInternet(context))
                 context.startService(new Intent(context, pushService).putExtra(PushService.NETWORK_CONNECTED, true));
             else
                 context.startService(new Intent(context, pushService).putExtra(PushService.NETWORK_DISCONNECTED, true));

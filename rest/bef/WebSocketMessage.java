@@ -14,6 +14,7 @@
  * limitations under the License.
  ******************************************************************************/
 
+
 package rest.bef;
 
 import java.util.List;
@@ -24,7 +25,7 @@ import java.util.List;
  * The master thread and the background reader/writer threads communicate using these messages
  * for WebSockets connections.
  */
-public class WebSocketMessage {
+class WebSocketMessage {
 
    /// Base message class.
    public static class Message {

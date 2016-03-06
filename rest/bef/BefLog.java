@@ -28,11 +28,11 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-public final class BefLog {
+final class BefLog {
     public static final String TAG_PREF = "BEFREST-";
     private static final String TAG = TAG_PREF + "BefLog";
     private static final boolean LogToFile = true;
-    private static final String SDK_VERSION_NAME = "1.1.0-test";
+    private static final String SDK_VERSION_NAME = "1.1.3-test(BefrestTest)";
 
     private OutputStreamWriter streamWriter = null;
     private SimpleDateFormat dateFormat;
@@ -40,7 +40,7 @@ public final class BefLog {
     private File currentFile = null;
 
     private static int getLogLevel() {
-        return Befrest.getLogLevel();
+        return BefrestInternal.Util.getLogLevel();
     }
 
     private static volatile BefLog Instance = null;
@@ -85,7 +85,7 @@ public final class BefLog {
     }
 
     public static void e(final String tag, final String message, final Throwable exception) {
-        if (!(getLogLevel() > Befrest.LOG_LEVEL_ERROR))
+        if (!(getLogLevel() > BefrestImpl.LOG_LEVEL_ERROR))
             Log.e(tag, message, exception);
         if (!LogToFile) return;
         final int Tid = Process.myTid();
@@ -107,7 +107,7 @@ public final class BefLog {
     }
 
     public static void e(final String tag, final String message) {
-        if (!(getLogLevel() > Befrest.LOG_LEVEL_ERROR))
+        if (!(getLogLevel() > BefrestImpl.LOG_LEVEL_ERROR))
         Log.e(tag, message);
         if (!LogToFile) return;
         final int Tid = Process.myTid();
@@ -128,7 +128,7 @@ public final class BefLog {
     }
 
     public static void e(final String tag, final Throwable e) {
-        if (!(getLogLevel() > Befrest.LOG_LEVEL_ERROR))
+        if (!(getLogLevel() > BefrestImpl.LOG_LEVEL_ERROR))
         e.printStackTrace();
         if (!LogToFile) return;
         final int Tid = Process.myTid();
@@ -155,7 +155,7 @@ public final class BefLog {
     }
 
     public static void d(final String tag, final String message) {
-        if (!(getLogLevel() > Befrest.LOG_LEVEL_DEBUG))
+        if (!(getLogLevel() > BefrestImpl.LOG_LEVEL_DEBUG))
         Log.d(tag, message);
         if (!LogToFile) return;
         final int Tid = Process.myTid();
@@ -176,7 +176,7 @@ public final class BefLog {
     }
 
     public static void i(final String tag, final String message) {
-        if (!(getLogLevel() > Befrest.LOG_LEVEL_INFO))
+        if (!(getLogLevel() > BefrestImpl.LOG_LEVEL_INFO))
         Log.i(tag, message);
         if (!LogToFile) return;
         final int Tid = Process.myTid();
@@ -197,7 +197,7 @@ public final class BefLog {
     }
 
     public static void v(final String tag, final String message) {
-        if (!(getLogLevel() > Befrest.LOG_LEVEL_VERBOSE))
+        if (!(getLogLevel() > BefrestImpl.LOG_LEVEL_VERBOSE))
         Log.v(tag, message);
         if (!LogToFile) return;
         final int Tid = Process.myTid();
@@ -218,7 +218,7 @@ public final class BefLog {
     }
 
     public static void w(final String tag, final String message) {
-        if (!(getLogLevel() > Befrest.LOG_LEVEL_WARN))
+        if (!(getLogLevel() > BefrestImpl.LOG_LEVEL_WARN))
         Log.w(tag, message);
         if (!LogToFile) return;
         final int Tid = Process.myTid();

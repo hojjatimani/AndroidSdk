@@ -14,6 +14,7 @@
  * limitations under the License.
  ******************************************************************************/
 
+
 package rest.bef;
 
 import android.os.Handler;
@@ -39,7 +40,7 @@ import rest.bef.BefLog;
  * The only method that needs to be called (from foreground thread) is quit(),
  * which gracefully shuts down the background receiver thread.
  */
-public class WebSocketReader extends Thread {
+class WebSocketReader extends Thread {
     private static final String TAG = BefLog.TAG_PREF + "WebSocketReader";
 
     private final Handler mMaster;
@@ -123,7 +124,7 @@ public class WebSocketReader extends Thread {
     protected void notify(WebSocketMessage.Message message) {
         if (mState == STATE_CLOSED) {
             //should not come here
-            BefLog.w(TAG, "Befrest Reader Tried To Notify Master In Closed State!");
+            BefLog.w(TAG, "BefrestImpl Reader Tried To Notify Master In Closed State!");
             return;
         }
         message.senderId = hashCode();

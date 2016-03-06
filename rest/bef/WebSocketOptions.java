@@ -14,6 +14,7 @@
  * limitations under the License.
  ******************************************************************************/
 
+
 package rest.bef;
 
 
@@ -24,7 +25,7 @@ import android.os.Build;
  * Note that the latter copies the options provided to connect(), so any change after
  * connect will have no effect.
  */
-public class WebSocketOptions {
+class WebSocketOptions {
 
    private int mMaxFramePayloadSize;
    private int mMaxMessagePayloadSize;

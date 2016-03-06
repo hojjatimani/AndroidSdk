@@ -14,6 +14,7 @@
  * limitations under the License.
  ******************************************************************************/
 
+
 package rest.bef;
 
 
@@ -26,7 +27,7 @@ package rest.bef;
  *  Implements the algorithm "Flexible and Economical UTF-8 Decoder" by
  *  Bjoern Hoehrmann (http://bjoern.hoehrmann.de/utf-8/decoder/dfa/).
  */
-public class Utf8Validator {
+class Utf8Validator {
 
    /// DFA state transitions (14 x 32 = 448).
    private static final int[] DFA = {

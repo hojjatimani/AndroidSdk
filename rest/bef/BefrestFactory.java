@@ -16,26 +16,32 @@
 
 package rest.bef;
 
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
 
-import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 
-public class WakeupAlarmReceiver extends BroadcastReceiver {
-    private static final String TAG = BefLog.TAG_PREF + "WakeupAlarmReceiver";
+/**
+ * Created by hojjatimani on 3/2/2016 AD.
+ */
+public class BefrestFactory {
+    static Object instance;
 
-    protected static final String ACTION_WAKEUP = "rest.bef.broadcasts.WAKEUP";
-
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        String action = intent.getAction();
-        BefLog.d(TAG, "BefrestImpl Wakeup Time!" + action);
-        Class<?> pushService = ((BefrestInvocHandler) Proxy.getInvocationHandler(BefrestFactory.getInternalInstance(context))).obj.pushService;
-        if (action.equals(ACTION_WAKEUP)) {
-            BefrestImpl.Util.acquireWakeLock(context);
-            context.startService(new Intent(context, pushService).putExtra(PushService.WAKEUP, true));
+    public static Befrest getInstance(Context context) {
+        if (instance != null) return (Befrest) instance;
+        synchronized (BefrestImpl.class) {
+            if (instance == null) {
+                BefrestImpl befrest = new BefrestImpl(context);
+                instance = Proxy.newProxyInstance(befrest.getClass().getClassLoader(), new Class<?>[]{Befrest.class, BefrestInternal.class}, new BefrestInvocHandler(befrest));
+            }
         }
+        return (Befrest) instance;
+    }
+
+    static BefrestInternal getInternalInstance(Context context) {
+        return (BefrestInternal) getInstance(context);
+    }
+
+    static Befrest getInstanceIfExist(){
+        return (Befrest) instance;
     }
 }

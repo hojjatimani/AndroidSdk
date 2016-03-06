@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2015-2016 Oddrun
+ * Copyright 2015-2016 Befrest
  * <p/>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
+
 package rest.bef;
 
 import android.content.BroadcastReceiver;
@@ -41,11 +42,10 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
     public final void onReceive(Context context, Intent intent) {
         int type = intent.getIntExtra(BROADCAST_TYPE, -1);
         String timeSent = intent.getStringExtra(KEY_TIME_SENT);
-        Befrest.getInstance(context).reportBroadcastReceived(context, timeSent + ":" + type);
         BefLog.v(TAG, "Broadcast Received :: type: " + type + "      timeSent:" + timeSent);
         switch (type) {
             case PUSH:
-                Parcelable[] p = intent.getParcelableArrayExtra(Befrest.Util.KEY_MESSAGE_PASSED);
+                Parcelable[] p = intent.getParcelableArrayExtra(BefrestImpl.Util.KEY_MESSAGE_PASSED);
                 BefrestMessage[] bm = new BefrestMessage[p.length];
                 System.arraycopy(p, 0, bm, 0, p.length);
                 onPushReceived(context, bm);
@@ -60,10 +60,10 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
                 onBefrestConnected(context);
                 break;
             case Anomaly:
-                onAnomaly(context, "" + intent.getStringExtra(Befrest.Util.KEY_MESSAGE_PASSED));
+                onAnomaly(context, "" + intent.getStringExtra(BefrestImpl.Util.KEY_MESSAGE_PASSED));
                 break;
             default:
-                BefLog.e(TAG, "Befrest Internal ERROR! Unknown Befrest Action!!");
+                BefLog.e(TAG, "BefrestImpl Internal ERROR! Unknown BefrestImpl Action!!");
         }
     }
 
@@ -77,7 +77,7 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
 
 
     /**
-     * Called when there is a problem with your Authentication token. The Service encounters authorization errors while trying to connect ro Befrest servers.
+     * Called when there is a problem with your Authentication token. The Service encounters authorization errors while trying to connect ro BefrestImpl servers.
      * The service will stop if an authorization problem happen.
      * <p>
      * Override this method to initialize the service again with right Auth token
@@ -88,7 +88,7 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
     }
 
     /**
-     * Connection Refreshed! This method is called when Befrest refreshes its connection to server after a refresh request from user
+     * Connection Refreshed! This method is called when BefrestImpl refreshes its connection to server after a refresh request from user
      *
      * @param context Context
      */
@@ -96,7 +96,7 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
     }
 
     /**
-     * Befrest Connected! This method is called when Befrest Connects to its server.
+     * BefrestImpl Connected! This method is called when BefrestImpl Connects to its server.
      *
      * @param context
      */

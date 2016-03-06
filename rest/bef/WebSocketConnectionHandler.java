@@ -14,13 +14,14 @@
  * limitations under the License.
  ******************************************************************************/
 
+
 package rest.bef;
 
 /**
  * WebSockets event handler. Users will usually provide an instance of a class
  * derived from this to handle WebSockets received messages and open/close events
  */
-public class WebSocketConnectionHandler implements WebSocket.ConnectionHandler {
+class WebSocketConnectionHandler implements WebSocket.ConnectionHandler {
 
     /**
      * Fired when the WebSockets connection has been established.

@@ -14,23 +14,35 @@
  * limitations under the License.
  ******************************************************************************/
 
-
 package rest.bef;
 
-class NameValuePair {
-    private String name;
-    private String value;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
 
-    public NameValuePair(String name , String value){
-        this.name = name;
-        this.value =value;
+/**
+ * Created by hojjatimani on 3/1/2016 AD.
+ */
+class BefrestInvocHandler implements InvocationHandler {
+    private static final String TAG = BefLog.TAG_PREF + "BefrestInvocHandler";
+    BefrestImpl obj;
+
+    public BefrestInvocHandler(BefrestImpl obj) {
+        this.obj = obj;
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public String getValue() {
-        return value;
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        Object res;
+        try {
+            res = method.invoke(obj, args);
+        } catch (IllegalStateException e) {
+            //todo check if it is really our exception
+            //nothing
+            throw e;
+        } catch (Exception e) {
+            //todo report
+            throw e;
+        }
+        return res;
     }
 }

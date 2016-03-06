@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
+
 package rest.bef;
 
 import java.io.ByteArrayInputStream;
@@ -23,7 +24,7 @@ import java.io.InputStream;
  * OutputStream backed by a byte array. This class provides copyless access
  * to byte array backing the ByteArrayOutputStream
  */
-public class NoCopyByteArrayOutputStream extends ByteArrayOutputStream {
+class NoCopyByteArrayOutputStream extends ByteArrayOutputStream {
 
    /**
     * Create new OutputStream backed by byte array.

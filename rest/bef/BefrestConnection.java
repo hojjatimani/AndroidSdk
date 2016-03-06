@@ -1,12 +1,31 @@
+/******************************************************************************
+ * Copyright 2015-2016 Befrest
+ * <p/>
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
+
 package rest.bef;
 
 import android.content.Context;
+import android.content.Intent;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
+import android.os.PowerManager;
 
 import java.io.IOException;
+import java.lang.reflect.Proxy;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
@@ -22,11 +41,20 @@ import javax.net.ssl.SSLSocketFactory;
 /**
  * Created by hojjatimani on 2/25/2016 AD.
  */
-public class BefrestConnection extends Handler {
+class BefrestConnection extends Handler {
     private static final String TAG = BefLog.TAG_PREF + "BefrestConnection";
+
+    PowerManager.WakeLock connectWakelock;
+    public static final String connectWakeLockName = "befrstconnectwakelock";
+
+//    PowerManager.WakeLock pushReceivedTimedWakeLock;
+//    public static final String pushReceivedWakeLockName = "befrstpushreceivedwakelock";
+//    public static final int pushReceivedWakeLockTimeout = 5 * 1000;
 
     Looper mLooper;
     Context mContext;
+
+    Class<?> pushService;
 
     protected WebSocketReader mReader;
     protected WebSocketWriter mWriter;
@@ -47,6 +75,7 @@ public class BefrestConnection extends Handler {
     private Runnable disconnectIfWebSocketHandshakeTimeOut = new Runnable() {
         @Override
         public void run() {
+            releaseConnectWakeLockIfNeeded();
             disconnectAndNotify(WebSocketConnectionHandler.CLOSE_HANDSHAKE_TIME_OUT, "Server Handshake Not Received After " + SERVER_HANDSHAKE_TIMEOUT + "ms");
         }
     };
@@ -65,9 +94,17 @@ public class BefrestConnection extends Handler {
     private Runnable sendPing = new Runnable() {
         @Override
         public void run() {
-            sendPing();
+            mContext.startService(new Intent(mContext, pushService).putExtra(PushService.PING, true));
         }
     };
+
+    private Runnable releaseConnectWakeLock = new Runnable() {
+        @Override
+        public void run() {
+            releaseConnectWakeLockIfNeeded();
+        }
+    };
+
     private Runnable restart = new Runnable() {
         @Override
         public void run() {
@@ -120,7 +157,7 @@ public class BefrestConnection extends Handler {
             return;
         prevSuccessfulPings++;
         setNextPingToSendInFuture();
-        BefLog.v(TAG, "Befrest Pinging Revised");
+        BefLog.v(TAG, "BefrestImpl Pinging Revised");
     }
 
     private void setNextPingToSendInFuture() {
@@ -135,12 +172,13 @@ public class BefrestConnection extends Handler {
     }
 
 
-    public BefrestConnection(Context context , Looper looper, WebSocket.ConnectionHandler wsHandler, String url, List<NameValuePair> headers) {
+    public BefrestConnection(Context context, Looper looper, WebSocket.ConnectionHandler wsHandler, String url, List<NameValuePair> headers) {
         super(looper);
         this.mLooper = looper;
         this.mWsHandler = wsHandler;
-        this.mContext = context;
+        this.mContext = context.getApplicationContext();
         parseWebsocketUri(url, headers);
+        pushService = ((BefrestInvocHandler) Proxy.getInvocationHandler(BefrestFactory.getInternalInstance(mContext))).obj.pushService;
     }
 
     @Override
@@ -155,10 +193,10 @@ public class BefrestConnection extends Handler {
             } else {
                 //unknown! should not come here!
             }
-        }catch (Exception e){
+        } catch (Exception e) {
             BefLog.e(TAG, "unExpected Exception!");
             //TODO report
-            throw  e;
+            throw e;
         }
     }
 
@@ -217,6 +255,7 @@ public class BefrestConnection extends Handler {
             if (serverHandshake.mSuccess) {
                 if (isMessageFromValidReaderWriter(msg)) {
                     mWsHandler.onOpen();
+                    postDelayed(releaseConnectWakeLock, 2000);
                     notifyConnectionRefreshedIfNeeded();
                     prevSuccessfulPings = 0;
                     setNextPingToSendInFuture();
@@ -274,6 +313,10 @@ public class BefrestConnection extends Handler {
                 break;
             case REFRESH:
                 refresh();
+                break;
+            case PING:
+                sendPing();
+                break;
         }
     }
 
@@ -298,13 +341,13 @@ public class BefrestConnection extends Handler {
     }
 
     public void connect() {
-        BefLog.v(TAG , "--------------------------connect()_START--------------------");
+        BefLog.v(TAG, "--------------------------connect()_START--------------------");
         if (isConnected()) {
             BefLog.v(TAG, "already connected!");
-        }else if (mContext != null && !Befrest.Util.isConnectedToInternet(mContext)){
+        } else if (mContext != null && !BefrestImpl.Util.isConnectedToInternet(mContext)) {
             BefLog.v(TAG, "no internet connection!");
-        }
-        else {
+        } else {
+            acquireConnectWakeLockIfPossible();
             waitABit();
             try {
                 mTransportChannel = createSocket();
@@ -474,8 +517,33 @@ public class BefrestConnection extends Handler {
         if (msg.senderId == System.identityHashCode(mReader) || msg.senderId == System.identityHashCode(mWriter))
             return true;
         else {
-            BefLog.e(TAG , "message from invalid Reader/Writer. message.getClass.getSimpleName = " + msg.getClass().getSimpleName());
+            BefLog.e(TAG, "message from invalid Reader/Writer. message.getClass.getSimpleName = " + msg.getClass().getSimpleName());
             return false;
+        }
+    }
+
+    private void acquireConnectWakeLockIfPossible() {
+        removeCallbacks(releaseConnectWakeLock);
+        if (BefrestInternal.Util.isWakeLockPermissionGranted(mContext)) {
+            if (connectWakelock != null) {
+                if (connectWakelock.isHeld())
+                    return;
+            } else {
+                PowerManager pm = (PowerManager) mContext.getSystemService(Context.POWER_SERVICE);
+                connectWakelock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, connectWakeLockName);
+                connectWakelock.setReferenceCounted(false);
+            }
+            connectWakelock.acquire();
+            BefLog.v(TAG, "connectWakeLock acquired.");
+        }
+    }
+
+    private void releaseConnectWakeLockIfNeeded() {
+        if (BefrestInternal.Util.isWakeLockPermissionGranted(mContext)) {
+            if (connectWakelock != null && connectWakelock.isHeld()) {
+                connectWakelock.release();
+                BefLog.v(TAG, "connectWakeLock released manually");
+            }
         }
     }
 

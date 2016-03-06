@@ -47,9 +47,9 @@ public final class BefrestMessage implements Parcelable {
                     type = MsgType.BATCH;
                     break;
                 default:
-                    BefLog.e(TAG, "Befrest Internal ERROR! Unknown Received Push Type!!!");
+                    BefLog.e(TAG, "BefrestImpl Internal ERROR! Unknown Received Push Type!!!");
             }
-            data = Befrest.Util.decodeBase64(jsObject.getString("m"));
+            data = BefrestImpl.Util.decodeBase64(jsObject.getString("m"));
             timeStamp = jsObject.getString("ts");
         } catch (JSONException e) {
             BefLog.e(TAG, e);

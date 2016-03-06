@@ -14,6 +14,7 @@
  * limitations under the License.
  ******************************************************************************/
 
+
 package rest.bef;
 
 import android.os.Handler;
@@ -41,7 +42,7 @@ import rest.bef.BefLog;
  * background thread) so that it can be formatted and sent out on the
  * underlying TCP socket.
  */
-public class WebSocketWriter extends Handler {
+class WebSocketWriter extends Handler {
     private static final String TAG = BefLog.TAG_PREF + "WebSocketWriter";
 
     /// Random number generator for handshake key and frame mask generation.
@@ -113,7 +114,7 @@ public class WebSocketWriter extends Handler {
     private void notify(WebSocketMessage.Message message) {
         if(stopped){
             //should not come here
-            BefLog.w(TAG, "Befrest Writer Tried To Notify Master In Closed State!");
+            BefLog.w(TAG, "BefrestImpl Writer Tried To Notify Master In Closed State!");
             return;
         }
         message.senderId = hashCode();

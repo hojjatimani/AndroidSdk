@@ -14,6 +14,7 @@
  * limitations under the License.
  ******************************************************************************/
 
+
 package rest.bef;
 
 import java.io.IOException;
@@ -26,7 +27,7 @@ import java.nio.ByteBuffer;
  * direct ByteBuffer for use i.e. with NIO for socket I/O. The ByteBuffer
  * is automatically enlarged if needed (preserving contents when enlarged).
  */
- public class ByteBufferOutputStream extends OutputStream {
+class ByteBufferOutputStream extends OutputStream {
 
    /// Initial size of allocated ByteBuffer.
    private final int mInitialSize;

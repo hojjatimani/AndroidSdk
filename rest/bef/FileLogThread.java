@@ -15,13 +15,14 @@
  ******************************************************************************/
 
 
+
 package rest.bef;
 
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 
-public final class FileLogThread extends Thread {
+final class FileLogThread extends Thread {
     public volatile Handler handler = null;
     private final Object handlerSyncObject = new Object();
 

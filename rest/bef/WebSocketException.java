@@ -14,9 +14,10 @@
  * limitations under the License.
  ******************************************************************************/
 
+
 package rest.bef;
 
-public class WebSocketException extends Exception {
+class WebSocketException extends Exception {
 
    private static final long serialVersionUID = 1L;
 
