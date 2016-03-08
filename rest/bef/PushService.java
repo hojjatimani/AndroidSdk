@@ -325,6 +325,10 @@ public class PushService extends Service {
     }
 
     private void connectIfNetworkAvailable() {
+        if (retryInProgress) {
+            cancelFutureRetry();
+            prevFailedConnectTries = 0;
+        }
         if (BefrestImpl.Util.isConnectedToInternet(this))
             mConnection.forward(new BefrestEvent(BefrestEvent.Type.CONNECT));
     }

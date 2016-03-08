@@ -48,7 +48,7 @@ public interface Befrest {
     Befrest init(long uId, String auth, String chId);
     Befrest advancedSetCustomPushService(Class<? extends PushService> customPushService);
     Befrest setUId(long uId);
-    Befrest setChId(String chId);
+    Befrest setChId(String chId) ;
     Befrest setAuth(String auth);
     void start();
     void stop();

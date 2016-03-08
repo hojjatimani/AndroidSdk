@@ -75,7 +75,6 @@ class BefrestConnection extends Handler {
     private Runnable disconnectIfWebSocketHandshakeTimeOut = new Runnable() {
         @Override
         public void run() {
-            releaseConnectWakeLockIfNeeded();
             disconnectAndNotify(WebSocketConnectionHandler.CLOSE_HANDSHAKE_TIME_OUT, "Server Handshake Not Received After " + SERVER_HANDSHAKE_TIMEOUT + "ms");
         }
     };
@@ -298,6 +297,7 @@ class BefrestConnection extends Handler {
         BefLog.v(TAG, "disconnectAndNotify:" + code + " , " + reason);
         disconnect();
         mWsHandler.onClose(code, reason);
+        releaseConnectWakeLockIfNeeded();
     }
 
     public void handleBefrestEvent(BefrestEvent e) {
