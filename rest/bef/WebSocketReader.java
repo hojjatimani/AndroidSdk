@@ -17,8 +17,11 @@
 
 package rest.bef;
 
+import android.app.Application;
+import android.content.Context;
 import android.os.Handler;
 import android.os.Message;
+import android.test.ApplicationTestCase;
 import android.util.Pair;
 
 import java.io.UnsupportedEncodingException;
@@ -43,6 +46,7 @@ import rest.bef.BefLog;
 class WebSocketReader extends Thread {
     private static final String TAG = BefLog.TAG_PREF + "WebSocketReader";
 
+    private Context context;
     private final Handler mMaster;
     private final Socket mSocket;
     private final WebSocketOptions mOptions;
@@ -88,7 +92,7 @@ class WebSocketReader extends Thread {
      * @param master The message handler of master (foreground thread).
      * @param socket The socket channel created on foreground thread.
      */
-    public WebSocketReader(Handler master, Socket socket, WebSocketOptions options, String threadName) {
+    public WebSocketReader(Handler master, Socket socket, WebSocketOptions options, String threadName, Context context) {
 
         super(threadName);
 
@@ -101,6 +105,7 @@ class WebSocketReader extends Thread {
 
         mFrameHeader = null;
         mState = STATE_CONNECTING;
+        this.context = context.getApplicationContext();
 
         BefLog.v(TAG, "created");
     }
@@ -689,10 +694,23 @@ class WebSocketReader extends Thread {
             // wrap the exception and notify master
             notify(new WebSocketMessage.ConnectionLost());
         } catch (Exception e) {
-            BefLog.e(TAG, "unExpected Exception!");
+            BefLog.e(TAG, "unExpected Exception! (handled)");
             // wrap the exception and notify master
             notify(new WebSocketMessage.Error(e));
-            //TODO report Crash
+
+            ACRACrashReport crash = new ACRACrashReport(context);
+            crash.message = "Exception in WebSocketReader. (handled)";
+            crash.exception = e;
+            crash.uncaughtExceptionThread = Thread.currentThread();
+            crash.report();
+        }catch (Throwable t){
+            BefLog.e(TAG, "unExpected Exception! (unHandled)");
+            ACRACrashReport crash = new ACRACrashReport(context);
+            crash.message = "Exception in WebSocketReader.";
+            crash.exception = t;
+            crash.uncaughtExceptionThread = Thread.currentThread();
+            crash.report();
+            throw  t;
         }
         finally {
             mStopped = true;

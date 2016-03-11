@@ -30,8 +30,12 @@ public class BefrestFactory {
         if (instance != null) return (Befrest) instance;
         synchronized (BefrestImpl.class) {
             if (instance == null) {
-                BefrestImpl befrest = new BefrestImpl(context);
-                instance = Proxy.newProxyInstance(befrest.getClass().getClassLoader(), new Class<?>[]{Befrest.class, BefrestInternal.class}, new BefrestInvocHandler(befrest));
+                Context applicationContext = context.getApplicationContext();
+                BefrestImpl befrest = new BefrestImpl(applicationContext);
+                ClassLoader classLoader = befrest.getClass().getClassLoader();
+                Class<?>[] interfaces = {Befrest.class, BefrestInternal.class};
+                BefrestInvocHandler invocationHandler = new BefrestInvocHandler(befrest, applicationContext);
+                instance = Proxy.newProxyInstance(classLoader, interfaces, invocationHandler);
             }
         }
         return (Befrest) instance;

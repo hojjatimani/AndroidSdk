@@ -278,18 +278,18 @@ public class PushService extends Service {
             e.printStackTrace();
         }
         unRegisterBroadCastReceiver();
-        super.onDestroy();
         if (befrestActual.isBefrestStarted)
             befrestProxy.setStartServiceAlarm();
+        super.onDestroy();
         BefLog.v(TAG, "PushService==================onDestroy()_END===============");
     }
 
     @Override
     public final void onTaskRemoved(Intent rootIntent) {
         BefLog.v(TAG, "PushService onTaskRemoved: ");
-        super.onTaskRemoved(rootIntent);
         if (befrestActual.isBefrestStarted)
             befrestProxy.setStartServiceAlarm();
+        super.onTaskRemoved(rootIntent);
     }
 
     private void handleEvent(String command) {

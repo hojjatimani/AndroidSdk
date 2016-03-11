@@ -238,6 +238,10 @@ final class BefLog {
         }
     }
 
+    public static void w(String TAG , String msg, Throwable e){
+        w(TAG, msg + "\n" + e.getMessage());
+    }
+
     public static void wtf(String TAG, Throwable ex) {
         e(TAG, ex);
     }

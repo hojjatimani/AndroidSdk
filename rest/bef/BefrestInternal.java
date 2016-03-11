@@ -16,6 +16,7 @@
 
 package rest.bef;
 
+import android.Manifest;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -155,6 +156,12 @@ interface BefrestInternal {
             return res;
         }
 
+        static boolean isWifiConnected(Context context){
+            ConnectivityManager connManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo mWifi = connManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+            return mWifi.isConnected();
+        }
+
         static boolean isWifiEnabled(Context context) {
             WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
             boolean res;
@@ -237,8 +244,7 @@ interface BefrestInternal {
         }
 
         static boolean isWakeLockPermissionGranted(Context context) {
-            String permission = "android.permission.WAKE_LOCK";
-            int res = context.checkCallingOrSelfPermission(permission);
+            int res = context.checkCallingOrSelfPermission(Manifest.permission.WAKE_LOCK);
             return (res == PackageManager.PERMISSION_GRANTED);
         }
     }

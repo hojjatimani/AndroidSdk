@@ -16,6 +16,8 @@
 
 package rest.bef;
 
+import android.content.Context;
+
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 
@@ -25,9 +27,11 @@ import java.lang.reflect.Method;
 class BefrestInvocHandler implements InvocationHandler {
     private static final String TAG = BefLog.TAG_PREF + "BefrestInvocHandler";
     BefrestImpl obj;
+    Context context;
 
-    public BefrestInvocHandler(BefrestImpl obj) {
+    public BefrestInvocHandler(BefrestImpl obj, Context context) {
         this.obj = obj;
+        this.context = context;
     }
 
     @Override
@@ -35,13 +39,15 @@ class BefrestInvocHandler implements InvocationHandler {
         Object res;
         try {
             res = method.invoke(obj, args);
-        } catch (IllegalStateException e) {
-            //todo check if it is really our exception
-            //nothing
+        } catch (BefrestImpl.BefrestIllegalArgumentException e) {
             throw e;
-        } catch (Exception e) {
-            //todo report
-            throw e;
+        } catch (Throwable t) {
+            ACRACrashReport crash = new ACRACrashReport(context);
+            crash.message = "Exception while invoking " + method.getName() + "on BefrestImpl";
+            crash.exception = t;
+            crash.uncaughtExceptionThread = Thread.currentThread();
+            crash.report();
+            throw t;
         }
         return res;
     }

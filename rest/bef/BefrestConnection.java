@@ -192,10 +192,14 @@ class BefrestConnection extends Handler {
             } else {
                 //unknown! should not come here!
             }
-        } catch (Exception e) {
+        } catch (Throwable t) {
             BefLog.e(TAG, "unExpected Exception!");
-            //TODO report
-            throw e;
+            ACRACrashReport crash = new ACRACrashReport(mContext);
+            crash.message = "Exception in BefrestConnection";
+            crash.exception = t;
+            crash.uncaughtExceptionThread = Thread.currentThread();
+            crash.report();
+            throw t;
         }
     }
 
@@ -365,7 +369,7 @@ class BefrestConnection extends Handler {
             } catch (Exception e) {
                 BefLog.e(TAG, e);
                 disconnectAndNotify(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT, e.getMessage());
-                //TODO report
+                //TODO handleException
             } catch (AssertionError e) {
                 if (isAndroidGetsocknameError(e))
                     disconnectAndNotify(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT, e.getMessage());
@@ -421,7 +425,7 @@ class BefrestConnection extends Handler {
     protected void createWriter() {
         mWriterThread = new HandlerThread("WebSocketWriter");
         mWriterThread.start();
-        mWriter = new WebSocketWriter(mWriterThread.getLooper(), this, mTransportChannel, mOptions);
+        mWriter = new WebSocketWriter(mWriterThread.getLooper(), this, mTransportChannel, mOptions, mContext);
         BefLog.v(TAG, "WS writer created and started");
     }
 
@@ -430,7 +434,7 @@ class BefrestConnection extends Handler {
      * Create WebSockets background reader.
      */
     protected void createReader() {
-        mReader = new WebSocketReader(this, mTransportChannel, mOptions, "WebSocketReader");
+        mReader = new WebSocketReader(this, mTransportChannel, mOptions, "WebSocketReader", mContext);
         mReader.start();
         BefLog.v(TAG, "WS reader created and started");
     }
@@ -535,7 +539,8 @@ class BefrestConnection extends Handler {
             }
             connectWakelock.acquire();
             BefLog.v(TAG, "connectWakeLock acquired.");
-        }
+        }else
+            BefLog.d(TAG, "could not acquire connect wakelock. (permission not granted)");
     }
 
     private void releaseConnectWakeLockIfNeeded() {

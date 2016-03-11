@@ -17,6 +17,7 @@
 
 package rest.bef;
 
+import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
@@ -44,6 +45,8 @@ import rest.bef.BefLog;
  */
 class WebSocketWriter extends Handler {
     private static final String TAG = BefLog.TAG_PREF + "WebSocketWriter";
+
+    private Context context;
 
     /// Random number generator for handshake key and frame mask generation.
     private final Random mRng = new Random();
@@ -75,7 +78,7 @@ class WebSocketWriter extends Handler {
      * @param socket  The socket channel created on foreground thread.
      * @param options WebSockets connection options.
      */
-    public WebSocketWriter(Looper looper, Handler master, Socket socket, WebSocketOptions options) {
+    public WebSocketWriter(Looper looper, Handler master, Socket socket, WebSocketOptions options, Context context) {
 
         super(looper);
 
@@ -84,6 +87,7 @@ class WebSocketWriter extends Handler {
         mSocket = socket;
         mOptions = options;
         mBuffer = new ByteBufferOutputStream(options.getMaxFramePayloadSize() + 14, 4 * 64 * 1024);
+        this.context = context.getApplicationContext();
 
         BefLog.v(TAG, "created");
     }
@@ -424,14 +428,25 @@ class WebSocketWriter extends Handler {
         }catch (WebSocketException e){
             BefLog.v(TAG, "run() : WebSocketException (" + e.toString() + ")");
             notify(new WebSocketMessage.ConnectionLost());
-        }catch (IOException e){
+        }catch (IOException e) {
             BefLog.v(TAG, "run() : IOException (" + e.toString() + ")");
             notify(new WebSocketMessage.ConnectionLost());
-        } catch (Exception e) {
-            Log.e(TAG, "unExpected Exception!");
+        }catch (Exception e){
+            Log.e(TAG, "unExpected Exception! (handled)");
             // wrap the exception and notify master
             notify(new WebSocketMessage.Error(e));
-            //TODO report crash
+            ACRACrashReport crash = new ACRACrashReport(context);
+            crash.message = "Exception in WebSocketReader. (handled)";
+            crash.exception = e;
+            crash.uncaughtExceptionThread = Thread.currentThread();
+            crash.report();
+        } catch (Throwable t) {
+            Log.e(TAG, "unExpected Exception! (unHandled)");
+            ACRACrashReport crash = new ACRACrashReport(context);
+            crash.message = "Exception in WebSocketReader. (handled)";
+            crash.exception = t;
+            crash.uncaughtExceptionThread = Thread.currentThread();
+            crash.report();
         }
     }
 
