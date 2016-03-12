@@ -33,27 +33,40 @@ public final class BefrestMessage implements Parcelable {
     /* package */ String timeStamp;
 
     /* package */ BefrestMessage(String rawMsg) {
-        JSONObject jsObject = null;
         try {
-            jsObject = new JSONObject(rawMsg);
-            switch (jsObject.getString("t")) {
-                case "0":
-                    type = MsgType.PONG;
-                    break;
-                case "1":
-                    type = MsgType.DATA;
-                    break;
-                case "2":
-                    type = MsgType.BATCH;
-                    break;
-                default:
-                    BefLog.e(TAG, "BefrestImpl Internal ERROR! Unknown Received Push Type!!!");
-            }
-            data = BefrestImpl.Util.decodeBase64(jsObject.getString("m"));
-            timeStamp = jsObject.getString("ts");
+            parseMessageSdkVersion1(rawMsg);
         } catch (JSONException e) {
-            BefLog.e(TAG, e);
+            BefLog.d(TAG, "Could not parse message with sdk v1 structure");
+            parseMessageNotFormatted(rawMsg);
         }
+        if(type == null || timeStamp == null || data == null){
+            parseMessageNotFormatted(rawMsg);
+        }
+    }
+
+    private void parseMessageSdkVersion1(String rawMessage) throws JSONException {
+        JSONObject jsObject = new JSONObject(rawMessage);
+        switch (jsObject.getString("t")) {
+            case "0":
+                type = MsgType.PONG;
+                break;
+            case "1":
+                type = MsgType.DATA;
+                break;
+            case "2":
+                type = MsgType.BATCH;
+                break;
+            default:
+                BefLog.e(TAG, "BefrestImpl Internal ERROR! Unknown Received Push Type!!!");
+        }
+        data = BefrestImpl.Util.decodeBase64(jsObject.getString("m"));
+        timeStamp = jsObject.getString("ts");
+    }
+
+    private void parseMessageNotFormatted(String rawMessage) {
+        type = MsgType.DATA;
+        data = rawMessage;
+        timeStamp = "unKnown";
     }
 
     public String getData() {
