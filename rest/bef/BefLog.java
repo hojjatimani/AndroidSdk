@@ -32,7 +32,7 @@ final class BefLog {
     public static final String TAG_PREF = "BEFREST-";
     private static final String TAG = TAG_PREF + "BefLog";
     private static final boolean LogToFile = false;
-    private static final String SDK_VERSION_NAME = "1.1.4";
+    private static final String SDK_VERSION_NAME = "1.1.6";
 
     private OutputStreamWriter streamWriter = null;
     private SimpleDateFormat dateFormat;
