@@ -17,9 +17,19 @@ class ACRACrashReportSender {
 
     final ACRAHttpRequest.Type type = ACRAHttpRequest.Type.JSON;
     final ACRAHttpRequest.Method method = ACRAHttpRequest.Method.PUT;
-    final String login = "befrest-reporter";
-    final String password = "befrest-reporter-password";
     final String formUri = "http://79.127.127.144:5984/acra-befrest/_design/acra-storage/_update/report";
+
+    public static void sendCoughtReportsInPossible(Context context) {
+        try {
+            if (BefrestInternal.Util.isWifiConnected(context)) {
+                ACRACrashReportSender crashSender = new ACRACrashReportSender(context);
+                crashSender.sendCoughtReports();
+            }
+        } catch (Exception e) {
+            //catch this to prevent recursive reports
+            BefLog.v(TAG, "Error in sending befrest reports. ");
+        }
+    }
 
     public ACRACrashReportSender(Context context) {
         this.context = context.getApplicationContext();
@@ -89,8 +99,6 @@ class ACRACrashReportSender {
                 URL reportUrl = new URL(formUri);
                 BefLog.d(TAG, "Connect to " + reportUrl.toString());
                 final ACRAHttpRequest request = new ACRAHttpRequest();
-                request.setLogin(login);
-                request.setPassword(password);
 
                 // Generate report body depending on requested type
                 String reportAsString = "";

@@ -2,6 +2,7 @@ package rest.bef;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.os.Build;
 import android.os.Environment;
@@ -17,11 +18,12 @@ import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.StringWriter;
 import java.io.Writer;
-import java.lang.reflect.Proxy;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -33,6 +35,8 @@ import static rest.bef.ACRAConstants.*;
 
 
 import static rest.bef.ACRAReportField.*;
+import static rest.bef.BefrestPrefrences.PREF_CH_ID;
+import static rest.bef.BefrestPrefrences.PREF_U_ID;
 
 /**
  * Fluent API used to assemble the different options used for a crash handleException.
@@ -51,11 +55,22 @@ final class ACRACrashReport {
         this.context = context;
     }
 
+    public ACRACrashReport(Context context, Throwable exception) {
+        this.exception = exception;
+        this.context = context;
+        this.uncaughtExceptionThread = Thread.currentThread();
+    }
+
     public ACRACrashReport(Context context, String message, Thread uncaughtExceptionThread, Throwable exception) {
         this.context = context;
         this.message = message;
         this.uncaughtExceptionThread = uncaughtExceptionThread;
         this.exception = exception;
+    }
+
+    public ACRACrashReport(Context context, String message) {
+        this.context = context;
+        this.message = message;
     }
 
     private final Map<String, String> customData = new HashMap<String, String>();
@@ -89,14 +104,10 @@ final class ACRACrashReport {
      * Assembles and sends the crash handleException
      */
     public void report() {
-
+        BefLog.d(TAG, "Generating Crash Report...");
         final ACRACrashReportData crashReportData = createCrashData();
-
-        // Always write the handleException file
-
         final File reportFile = getReportFileName(crashReportData);
         saveCrashReportFile(reportFile, crashReportData);
-
     }
 
     private File getReportFileName(ACRACrashReportData crashData) {
@@ -165,13 +176,6 @@ final class ACRACrashReport {
                         BefLog.e(TAG, "Error while retrieving RADIOLOG data", e);
                     }
                 }
-                if (crashReportFields.contains(DROPBOX)) {
-                    try {
-//                        crashReportData.put(DROPBOX, new DropBoxCollector().read(context, config));
-                    } catch (RuntimeException e) {
-                        BefLog.e(TAG, "Error while retrieving DROPBOX data", e);
-                    }
-                }
             } else {
                 BefLog.d(TAG, "READ_LOGS not allowed. ACRA will not include LogCat and DropBox data.");
             }
@@ -186,6 +190,7 @@ final class ACRACrashReport {
             crashReportData.put(IS_SILENT, "true");
 
             // Always generate handleException uuid
+            BefLog.d(TAG, "ACRA adding uuid");
             try {
                 crashReportData.put(ACRAReportField.REPORT_ID, UUID.randomUUID().toString());
             } catch (RuntimeException e) {
@@ -193,8 +198,9 @@ final class ACRACrashReport {
             }
 
             // Always generate crash time
+            GregorianCalendar calendar = new GregorianCalendar();
             try {
-                crashReportData.put(ACRAReportField.USER_CRASH_DATE, getTimeString(System.currentTimeMillis()));
+                crashReportData.put(ACRAReportField.USER_CRASH_DATE, getTimeString(calendar.getTimeInMillis()));
             } catch (RuntimeException e) {
                 BefLog.e(TAG, "Error while retrieving USER_CRASH_DATE data", e);
             }
@@ -212,8 +218,10 @@ final class ACRACrashReport {
             if (crashReportFields.contains(INSTALLATION_ID)) {
                 try {
                     //hojjat: i will use channelId-ANDROID_ID
-                    BefrestImpl bi = ((BefrestInvocHandler) Proxy.getInvocationHandler(BefrestFactory.getInstance(context))).obj;
-                    String installationId = bi.uId + "-" + bi.chId + "-" + Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
+                    SharedPreferences prefs = BefrestPrefrences.getPrefs(context);
+                    long uId = prefs.getLong(PREF_U_ID, -1);
+                    String chId = prefs.getString(PREF_CH_ID, "chId");
+                    String installationId = uId + "-" + chId + "-" + Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
                     crashReportData.put(INSTALLATION_ID, installationId);
                 } catch (RuntimeException e) {
                     BefLog.e(TAG, "Error while retrieving INSTALLATION_ID data", e);
@@ -338,30 +346,6 @@ final class ACRACrashReport {
                     BefLog.e(TAG, "Error while retrieving CUSTOM_DATA data", e);
                 }
             }
-
-            //we dont need i think
-//            if (crashReportFields.contains(BUILD_CONFIG)) {
-//                try {
-//                    final Class buildConfigClass = getBuildConfigClass();
-//                    if (buildConfigClass != null) {
-//                        crashReportData.put(BUILD_CONFIG, ACRAReflectionCollector.collectConstants(buildConfigClass));
-//                    }
-//                } catch (ClassNotFoundException ignored) {
-//                    // We have already logged this when we had the name of the class that wasn't found.
-//                } catch (RuntimeException e) {
-//                    BefLog.e(TAG, "Error while retrieving BUILD_CONFIG data", e);
-//                }
-//            }
-
-            //how whoud we have user emainl??
-            // Add user email address, if set in the app's preferences
-//            if (crashReportFields.contains(USER_EMAIL)) {
-//                try {
-//                    crashReportData.put(USER_EMAIL, prefs.getString(ACRA.PREF_USER_EMAIL_ADDRESS, "N/A"));
-//                } catch (RuntimeException e) {
-//                    BefLog.e(TAG, "Error while retrieving USER_EMAIL data", e);
-//                }
-//            }
 
             // Device features
             if (crashReportFields.contains(DEVICE_FEATURES)) {
@@ -495,7 +479,7 @@ final class ACRACrashReport {
         } catch (RuntimeException e) {
             BefLog.e(TAG, "Error while retrieving crash data", e);
         }
-
+        BefLog.d(TAG, "creating report data completed.");
         return crashReportData;
     }
 
@@ -547,6 +531,8 @@ final class ACRACrashReport {
     }
 
     public String collectLogCat(String bufferName) {
+        BefLog.d(TAG, "collectLogCat(" + bufferName + ")");
+
         final int myPid = android.os.Process.myPid();
         String myPidStr = null;
         myPidStr = Integer.toString(myPid) + "):";
@@ -558,6 +544,7 @@ final class ACRACrashReport {
             commandLine.add(bufferName);
         }
 
+        commandLine.addAll(Arrays.asList(ACRAConstants.DEFAULT_LOGCAT_ARGUMENTS));
 
         final LinkedList<String> logcatBuf = new ACRABoundedLinkedList<String>(DEFAULT_TAIL_COUNT);
 

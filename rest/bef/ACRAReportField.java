@@ -279,10 +279,13 @@ enum ACRAReportField {
      * Retrieves details of the failing thread (id, name, group name).
      */
     THREAD_DETAILS,
+
+    timestamp,
     /**
      * Retrieves the user IP address(es).
      */
     USER_IP;
+
 
     /**
      * Whether this field is a collection of key/value pairs.

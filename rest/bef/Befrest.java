@@ -46,7 +46,7 @@ public interface Befrest {
     int LOG_LEVEL_NO_LOG = 100;
 
     Befrest init(long uId, String auth, String chId);
-    Befrest advancedSetCustomPushService(Class<? extends PushService> customPushService);
+    Befrest setCustomPushService(Class<? extends PushService> customPushService);
     Befrest setUId(long uId);
     Befrest setChId(String chId) ;
     Befrest setAuth(String auth);
@@ -55,8 +55,6 @@ public interface Befrest {
     Befrest addTopic(String topicName);
     Befrest removeTopic(String topicName);
     String[] getCurrentTopics();
-    Befrest enableCheckInSleep();
-    Befrest disableCheckInSleep();
     boolean refresh();
     void registerPushReceiver(BefrestPushReceiver receiver);
     void unregisterPushReceiver(BefrestPushReceiver receiver);

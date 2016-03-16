@@ -16,6 +16,8 @@
 
 package rest.bef;
 
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Handler;
@@ -23,6 +25,7 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
 import android.os.PowerManager;
+import android.os.SystemClock;
 
 import java.io.IOException;
 import java.lang.reflect.Proxy;
@@ -46,10 +49,6 @@ class BefrestConnection extends Handler {
 
     PowerManager.WakeLock connectWakelock;
     public static final String connectWakeLockName = "befrstconnectwakelock";
-
-//    PowerManager.WakeLock pushReceivedTimedWakeLock;
-//    public static final String pushReceivedWakeLockName = "befrstpushreceivedwakelock";
-//    public static final int pushReceivedWakeLockTimeout = 5 * 1000;
 
     Looper mLooper;
     Context mContext;
@@ -139,6 +138,7 @@ class BefrestConnection extends Handler {
     private void cancelFuturePing() {
         BefLog.v(TAG, "cancelFuturePing()");
         removeCallbacks(sendPing);
+        cancelKeepPingingAlarm();
     }
 
     private void cancelUpcommingRestart() {
@@ -168,6 +168,7 @@ class BefrestConnection extends Handler {
         BefLog.v(TAG, "setNextPingToSendInFuture()  interval : " + interval);
         lastPingSetTime = System.currentTimeMillis();
         postDelayed(sendPing, interval);
+        setKeepPingingAlarm(interval);
     }
 
 
@@ -178,6 +179,25 @@ class BefrestConnection extends Handler {
         this.mContext = context.getApplicationContext();
         parseWebsocketUri(url, headers);
         pushService = ((BefrestInvocHandler) Proxy.getInvocationHandler(BefrestFactory.getInternalInstance(mContext))).obj.pushService;
+    }
+
+    public void setKeepPingingAlarm(int pingDelay) {
+        int delay = (pingDelay * 2) + 60000;
+        AlarmManager alarmMgr = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(mContext, pushService).putExtra(PushService.KEEP_PINGING, true);
+        PendingIntent pi = PendingIntent.getService(mContext, BefrestImpl.KEEP_PINGING_ALARM_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        long triggerAtMillis = SystemClock.elapsedRealtime() + delay;
+        alarmMgr.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAtMillis, pi);
+        BefLog.d(TAG, "KeepPinging alarm set for " + delay + " ms");
+    }
+
+    public void cancelKeepPingingAlarm() {
+        AlarmManager alarmMgr = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(mContext, pushService).putExtra(PushService.KEEP_PINGING, true);
+        PendingIntent pi = PendingIntent.getService(mContext, BefrestImpl.KEEP_PINGING_ALARM_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        alarmMgr.cancel(pi);
+        pi.cancel();
+        BefLog.d(TAG, "KeepPinging alarm canceled");
     }
 
     @Override
@@ -327,7 +347,7 @@ class BefrestConnection extends Handler {
     private void refresh() {
         refreshRequested = true;
         if (isConnected()) {
-            prevSuccessfulPings = 0;
+//            prevSuccessfulPings = 0; seems illogical
             cancelFuturePing();
             cancelUpcommingRestart();
             setNextPingToSendInFuture(0);
@@ -366,10 +386,9 @@ class BefrestConnection extends Handler {
             } catch (IOException e) {
                 BefLog.e(TAG, e);
                 disconnectAndNotify(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT, e.getMessage());
-            } catch (Exception e) {
-                BefLog.e(TAG, e);
-                disconnectAndNotify(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT, e.getMessage());
-                //TODO handleException
+            } catch (Exception ex) {
+                BefLog.e(TAG, ex);
+                disconnectAndNotify(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT, ex.getMessage());
             } catch (AssertionError e) {
                 if (isAndroidGetsocknameError(e))
                     disconnectAndNotify(WebSocketConnectionHandler.CLOSE_CANNOT_CONNECT, e.getMessage());
@@ -460,7 +479,6 @@ class BefrestConnection extends Handler {
             else mWsQuery = mWsUri.getRawQuery();
         } catch (URISyntaxException e) {
             //should not come here
-            //TODO
         }
         mWsSubprotocols = null;
         mWsHeaders = headers;
@@ -539,7 +557,7 @@ class BefrestConnection extends Handler {
             }
             connectWakelock.acquire();
             BefLog.v(TAG, "connectWakeLock acquired.");
-        }else
+        } else
             BefLog.d(TAG, "could not acquire connect wakelock. (permission not granted)");
     }
 

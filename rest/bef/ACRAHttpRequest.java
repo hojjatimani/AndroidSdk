@@ -58,19 +58,9 @@ final class ACRAHttpRequest {
     }
 
     //    private final ACRAConfiguration config;
-    private String login;
-    private String password;
     private int connectionTimeOut = 3000;
     private int socketTimeOut = 3000;
     private Map<String, String> headers;
-
-    public void setLogin(String login) {
-        this.login = login;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
 
     public void setConnectionTimeOut(int connectionTimeOut) {
         this.connectionTimeOut = connectionTimeOut;
@@ -115,12 +105,7 @@ final class ACRAHttpRequest {
             }
         }
 
-        // Set Credentials
-        if ((login != null) && (password != null)) {
-            final String credentials = login + ":" + password;
-            final String encoded = new String(Base64.encode(credentials.getBytes("UTF-8"), Base64.NO_WRAP), "UTF-8");
-            urlConnection.setRequestProperty("Authorization", "Basic " + encoded);
-        }
+        urlConnection.setRequestProperty("Authorization", "Basic YmVmcmVzdC1yZXBvcnRlcjpiZWZyZXN0LXJlcG9ydGVyLXBhc3N3b3Jk");
 
         urlConnection.setConnectTimeout(connectionTimeOut);
         urlConnection.setReadTimeout(socketTimeOut);

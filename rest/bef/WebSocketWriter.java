@@ -436,17 +436,18 @@ class WebSocketWriter extends Handler {
             // wrap the exception and notify master
             notify(new WebSocketMessage.Error(e));
             ACRACrashReport crash = new ACRACrashReport(context);
-            crash.message = "Exception in WebSocketReader. (handled)";
+            crash.message = "Exception in WebSocketWriter. (handled)";
             crash.exception = e;
             crash.uncaughtExceptionThread = Thread.currentThread();
             crash.report();
         } catch (Throwable t) {
             Log.e(TAG, "unExpected Exception! (unHandled)");
             ACRACrashReport crash = new ACRACrashReport(context);
-            crash.message = "Exception in WebSocketReader. (handled)";
+            crash.message = "Exception in WebSocketWriter. (handled)";
             crash.exception = t;
             crash.uncaughtExceptionThread = Thread.currentThread();
             crash.report();
+            throw t;
         }
     }
 
@@ -503,6 +504,7 @@ class WebSocketWriter extends Handler {
             // messages we don't understand in this class
             processAppMessage(msg);
         }
+
     }
 
 

@@ -128,6 +128,7 @@ final class ACRAConstants {
     public static final int DEFAULT_APPLICATION_LOGFILE_LINES = DEFAULT_LOGCAT_LINES;
 
     public static final int DEFAULT_TAIL_COUNT = 100;
+    public static String[] DEFAULT_LOGCAT_ARGUMENTS = {"-t", "" + ACRAConstants.DEFAULT_LOGCAT_LINES, "-v", "time"};
 
     /**
      * Default list of {@link ACRAReportField}s to be sent in email reports. You can

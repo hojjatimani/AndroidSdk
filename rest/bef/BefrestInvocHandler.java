@@ -17,6 +17,8 @@
 package rest.bef;
 
 import android.content.Context;
+import android.nfc.Tag;
+import android.util.Log;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -25,7 +27,7 @@ import java.lang.reflect.Method;
  * Created by hojjatimani on 3/1/2016 AD.
  */
 class BefrestInvocHandler implements InvocationHandler {
-    private static final String TAG = BefLog.TAG_PREF + "BefrestInvocHandler";
+    private static final String TAG = BefLog.TAG_PREF + "BefrestInvHdlr";
     BefrestImpl obj;
     Context context;
 
@@ -42,10 +44,8 @@ class BefrestInvocHandler implements InvocationHandler {
         } catch (BefrestImpl.BefrestIllegalArgumentException e) {
             throw e;
         } catch (Throwable t) {
-            ACRACrashReport crash = new ACRACrashReport(context);
+            ACRACrashReport crash = new ACRACrashReport(context, t);
             crash.message = "Exception while invoking " + method.getName() + "on BefrestImpl";
-            crash.exception = t;
-            crash.uncaughtExceptionThread = Thread.currentThread();
             crash.report();
             throw t;
         }

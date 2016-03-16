@@ -18,6 +18,7 @@ package rest.bef;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
+
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -30,12 +31,6 @@ final class ACRASharedPreferencesCollector {
     private static final String TAG = BefLog.TAG_PREF + "ACRASharedPreferencesCollector";
 
     private final Context context;
-//    private final ACRAConfiguration config;
-
-//    public ACRASharedPreferencesCollector(Context context, ACRAConfiguration config) {
-//        this.context = context;
-//        this.config = config;
-//    }
 
 
     public ACRASharedPreferencesCollector(Context context) {
@@ -50,22 +45,14 @@ final class ACRASharedPreferencesCollector {
      *
      * @return A readable formatted String containing all key/value pairs.
      */
-    
-    public String collect() {
-        final StringBuilder result = new StringBuilder();
 
+    public String collect() {
+        //hojjat : just include befrest shared preferences
+        final StringBuilder result = new StringBuilder();
         // Include the default SharedPreferences
         final Map<String, SharedPreferences> sharedPrefs = new TreeMap<String, SharedPreferences>();
-        sharedPrefs.put("default", PreferenceManager.getDefaultSharedPreferences(context));
 
-        //hojjat no additionalPrefrence
-        // Add in any additional SharedPreferences
-//        final String[] sharedPrefIds = config.additionalSharedPreferences();
-//        if (sharedPrefIds != null) {
-//            for (final String sharedPrefId : sharedPrefIds) {
-//                sharedPrefs.put(sharedPrefId, context.getSharedPreferences(sharedPrefId, Context.MODE_PRIVATE));
-//            }
-//        }
+        sharedPrefs.put("befrestPrefrences", context.getSharedPreferences(BefrestPrefrences.SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE));
 
         // Iterate over all included preference files and add the preferences from each.
         for (Map.Entry<String, SharedPreferences> entry : sharedPrefs.entrySet()) {
@@ -83,7 +70,7 @@ final class ACRASharedPreferencesCollector {
             // Add all non-filtered preferences from that preference file.
             for (final Map.Entry<String, ?> prefEntry : prefEntries.entrySet()) {
                 if (filteredKey(prefEntry.getKey())) {
-                     BefLog.d(TAG, "Filtered out sharedPreference=" + sharedPrefId + "  key=" + prefEntry.getKey() + " due to filtering rule");
+                    BefLog.d(TAG, "Filtered out sharedPreference=" + sharedPrefId + "  key=" + prefEntry.getKey() + " due to filtering rule");
                 } else {
                     final Object prefValue = prefEntry.getValue();
                     result.append(sharedPrefId).append('.').append(prefEntry.getKey()).append('=');
@@ -104,7 +91,7 @@ final class ACRASharedPreferencesCollector {
      * @param key the name of the preference to be checked
      * @return true if the key has to be excluded from reports.
      */
-    private boolean filteredKey( String key) {
+    private boolean filteredKey(String key) {
         //hojjat exclude nothing
 //        for (String regex : config.excludeMatchingSharedPreferencesKeys()) {
 //            if (key.matches(regex)) {

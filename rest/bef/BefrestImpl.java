@@ -1,12 +1,12 @@
 /******************************************************************************
  * Copyright 2015-2016 Befrest
- * <p/>
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p/>
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,7 +21,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.content.SharedPreferences.Editor;
 import android.os.Bundle;
 import android.os.SystemClock;
 
@@ -29,21 +28,26 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import static rest.bef.BefrestPrefrences.*;
+
 /**
  * Main class to interact with BefrestImpl service.
  */
 final class BefrestImpl implements Befrest, BefrestInternal {
     private static String TAG = BefLog.TAG_PREF + "BefrestImpl";
 
+    static final int START_ALARM_CODE = 676428;
+    static final int KEEP_PINGING_ALARM_CODE = 676429;
+
     BefrestImpl(Context context) {
         this.context = context.getApplicationContext();
-        SharedPreferences prefs = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
+        SharedPreferences prefs = BefrestPrefrences.getPrefs(context);
         uId = prefs.getLong(PREF_U_ID, -1);
         chId = prefs.getString(PREF_CH_ID, null);
         auth = prefs.getString(PREF_AUTH, null);
         topics = prefs.getString(PREF_TOPICS, "");
         logLevel = prefs.getInt(PREF_LOG_LEVEL, LOG_LEVEL_DEFAULT);
-        checkInSleep = prefs.getBoolean(PREF_CHECK_IN_DEEP_SLEEP, false);
+        connectAnomalyDataRecordingStartTime = prefs.getLong(PREF_CONNECT_ANOMALY_DATA_RECORDING_TIME, System.currentTimeMillis());
         loadPushServiceData(prefs);
     }
 
@@ -66,7 +70,6 @@ final class BefrestImpl implements Befrest, BefrestInternal {
     String chId;
     String auth;
     int logLevel;
-    boolean checkInSleep;
     boolean isBefrestStarted;
     String topics;
     boolean connectionDataChangedSinceLastStart;
@@ -74,8 +77,12 @@ final class BefrestImpl implements Befrest, BefrestInternal {
     boolean refreshIsRequested = false;
     long lastAcceptedRefreshRequestTime = 0;
 
+    long connectAnomalyDataRecordingStartTime;
+
     private static final int[] AuthProblemBroadcastDelay = {0, 60 * 1000, 240 * 1000, 600 * 1000};
     int prevAuthProblems = 0;
+
+    private static final long WAIT_TIME_BEFORE_SENDING_CONNECT_ANOMLY_REPORT = 24 * 60 * 60 * 1000; // 24h
 
     private int reportedContinuousCloses;
     private String continuousClosesTypes;
@@ -83,23 +90,6 @@ final class BefrestImpl implements Befrest, BefrestInternal {
     private String subscribeUrl;
     private List<NameValuePair> subscribeHeaders;
     private NameValuePair authHeader;
-
-    /**
-     * Name for sharedPreferences used for saving BefrestImpl data.
-     */
-    private static String SHARED_PREFERENCES_NAME = "rest.bef.SHARED_PREFERENCES";
-    private static final String PREF_U_ID = "PREF_U_ID";
-    private static final String PREF_AUTH = "PREF_AUTH";
-    private static final String PREF_CH_ID = "PREF_CH_ID";
-    private static final String PREF_CHECK_IN_DEEP_SLEEP = "PREF_CHECK_IN_DEEP_SLEEP";
-    private static final String PREF_TOPICS = "PREF_TOPICS";
-    private static final String PREF_IS_SERVICE_STARTED = "PREF_IS_SERVICE_STARTED";
-    private static final String PREF_LOG_LEVEL = "PREF_LOG_LEVEL";
-    public static final String PREF_CUSTOM_PUSH_SERVICE_NAME = "PREF_CUSTOM_PUSH_SERVICE_NAME";
-    public static final String PREF_CONTINUOUS_CLOSES = "PREF_CONTINUOUS_CLOSES";
-    public static final String PREF_CONTINUOUS_CLOSES_TYPES = "PREF_CONTINUOUS_CLOSES_TYPES";
-    public static final String PREF_BROADCAST_ANOMALY_INFO = "PREF_BROADCAST_ANOMALY_INFO";
-    private static final String PREF_SHOULD_NOT_REPORT_BROADCAST_ANOMALY = "PREF_SHOULD_NOT_REPORT_BROADCAST_ANOMALY";
 
     /**
      * Initialize push receive service. You can also use setter messages for initializing.
@@ -123,18 +113,15 @@ final class BefrestImpl implements Befrest, BefrestInternal {
 
     /**
      * @param customPushService that befrest will start in background. This class must extend rest.bef.PushService
-     * @return
      */
-    public Befrest advancedSetCustomPushService(Class<? extends PushService> customPushService) {
+    public Befrest setCustomPushService(Class<? extends PushService> customPushService) {
         if (customPushService == null)
             throw new BefrestIllegalArgumentException("invalid custom push service!");
         else if (isBefrestStarted && !customPushService.equals(pushService)) {
             throw new BefrestIllegalArgumentException("can not set custom push service after starting befrest!");
         } else {
             this.pushService = customPushService;
-            Editor editor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-            editor.putString(PREF_CUSTOM_PUSH_SERVICE_NAME, customPushService.getName());
-            editor.commit();
+            saveString(context, PREF_CUSTOM_PUSH_SERVICE_NAME, customPushService.getName());
         }
         return this;
     }
@@ -148,9 +135,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         if (uId != this.uId) {
             this.uId = uId;
             clearTempData();
-            Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-            prefEditor.putLong(PREF_U_ID, uId);
-            prefEditor.commit();
+            saveLong(context, PREF_U_ID, uId);
         }
         return this;
     }
@@ -166,9 +151,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         if (!chId.equals(this.chId)) {
             this.chId = chId;
             clearTempData();
-            Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-            prefEditor.putString(PREF_CH_ID, chId);
-            prefEditor.commit();
+            saveString(context, PREF_CH_ID, chId);
         }
         return this;
     }
@@ -184,9 +167,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         if (!auth.equals(this.auth)) {
             this.auth = auth;
             clearTempData();
-            Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-            prefEditor.putString(PREF_AUTH, auth);
-            prefEditor.commit();
+            saveString(context, PREF_AUTH, auth);
         }
         return this;
     }
@@ -208,7 +189,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         context.startService(new Intent(context, pushService).putExtra(PushService.CONNECT, true));
         connectionDataChangedSinceLastStart = false;
         Util.enableConnectivityChangeListener(context);
-        if (checkInSleep) scheduleWakeUP();
+        ACRACrashReportSender.sendCoughtReportsInPossible(context);
     }
 
     /**
@@ -218,7 +199,6 @@ final class BefrestImpl implements Befrest, BefrestInternal {
     public void stop() {
         isBefrestStarted = false;
         context.stopService(new Intent(context, pushService));
-        cancelWakeUP();
         Util.disableConnectivityChangeListener(context);
         BefLog.i(TAG, "BefrestImpl Service Stopped.");
     }
@@ -246,10 +226,10 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         String[] splitedTopics = topics.split("-");
         boolean found = false;
         String resTopics = "";
-        for (int i = 0; i < splitedTopics.length; i++) {
-            if (splitedTopics[i].equals(topicName))
+        for (String splitedTopic : splitedTopics) {
+            if (splitedTopic.equals(topicName))
                 found = true;
-            else resTopics += splitedTopics[i] + "-";
+            else resTopics += splitedTopic + "-";
         }
         if (!found)
             throw new BefrestIllegalArgumentException("Topic Not Exist!");
@@ -268,26 +248,6 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         if (topics.length() > 0)
             return topics.split("-");
         return new String[0];
-    }
-
-    /**
-     * Minimizes push delay when device is in deep sleep.
-     * You <i><b>SHOULD NOT</b></i> enable this feature unless you really need it as it might cause battery drain.
-     */
-    public Befrest enableCheckInSleep() {
-        checkInSleep = true;
-        Editor editor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-        editor.putBoolean(PREF_CHECK_IN_DEEP_SLEEP, true).commit();
-        if (isBefrestStarted) scheduleWakeUP();
-        return this;
-    }
-
-    public Befrest disableCheckInSleep() {
-        checkInSleep = false;
-        Editor editor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-        editor.putBoolean(PREF_CHECK_IN_DEEP_SLEEP, false).commit();
-        cancelWakeUP();
-        return this;
     }
 
     /**
@@ -333,8 +293,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
     public Befrest setLogLevel(int logLevel) {
         if (logLevel < 0) BefLog.i(TAG, "Invalid Log Level!");
         else {
-            Editor editor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-            editor.putInt(PREF_LOG_LEVEL, logLevel).commit();
+            saveInt(context, PREF_LOG_LEVEL, logLevel);
             this.logLevel = logLevel;
         }
         return this;
@@ -352,47 +311,17 @@ final class BefrestImpl implements Befrest, BefrestInternal {
 
     private void updateTpics(String topics) {
         this.topics = topics;
-        Editor editor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-        editor.putString(PREF_TOPICS, topics).commit();
+        saveString(context, PREF_TOPICS, topics);
         clearTempData();
-    }
-
-    private static void saveToPrefs(Context context, long uId, String AUTH, String chId) {
-        Editor prefEditor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-        prefEditor.putLong(PREF_U_ID, uId);
-        prefEditor.putString(PREF_AUTH, AUTH);
-        prefEditor.putString(PREF_CH_ID, chId);
-        prefEditor.commit();
-    }
-
-    private void scheduleWakeUP() {
-        AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        Intent intent = new Intent(context, WakeupAlarmReceiver.class);
-        intent.setAction(WakeupAlarmReceiver.ACTION_WAKEUP);
-        PendingIntent broadcast = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-        //by using InexatRepeating only pre defined intervals can be used
-        long triggerAtMillis = SystemClock.elapsedRealtime() + AlarmManager.INTERVAL_HOUR;
-        alarmMgr.setInexactRepeating(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAtMillis, AlarmManager.INTERVAL_HOUR, broadcast);
-        BefLog.d(TAG, "BefrestImpl Scheduled To Wake Device Up.");
     }
 
     public void setStartServiceAlarm() {
         AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         Intent intent = new Intent(context, pushService).putExtra(PushService.SERVICE_STOPPED, true);
-        PendingIntent pi = PendingIntent.getService(context, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent pi = PendingIntent.getService(context, START_ALARM_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT);
         long triggerAtMillis = SystemClock.elapsedRealtime() + PushService.START_SERVICE_AFTER_ILLEGAL_STOP_DELAY;
         alarmMgr.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAtMillis, pi);
         BefLog.d(TAG, "BefrestImpl Scheduled To Start Service In " + PushService.START_SERVICE_AFTER_ILLEGAL_STOP_DELAY + "ms");
-    }
-
-    private void cancelWakeUP() {
-        AlarmManager alarmMgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        Intent intent = new Intent(context, WakeupAlarmReceiver.class);
-        intent.setAction(WakeupAlarmReceiver.ACTION_WAKEUP);
-        PendingIntent broadcast = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-        alarmMgr.cancel(broadcast);
-        broadcast.cancel();
-        BefLog.d(TAG, "BefrestImpl Wakeup Canceled");
     }
 
     private void clearTempData() {
@@ -433,24 +362,6 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         return AuthProblemBroadcastDelay[index];
     }
 
-    public void reportOnClose(Context context, int code) {
-        BefLog.d(TAG, "reportOnClose :: total:" + reportedContinuousCloses + " code:" + code);
-        reportedContinuousCloses++;
-        continuousClosesTypes += code + ",";
-        Editor editor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-        editor.putString(PREF_CONTINUOUS_CLOSES_TYPES, continuousClosesTypes);
-        editor.putInt(PREF_CONTINUOUS_CLOSES, reportedContinuousCloses);
-        editor.commit();
-        //TODO 3 is for test!
-        if (reportedContinuousCloses == 3 || reportedContinuousCloses == 10) {
-            Bundle b = new Bundle(1);
-            b.putString(Util.KEY_MESSAGE_PASSED, continuousClosesTypes);
-            sendBefrestBroadcast(context, BefrestPushReceiver.Anomaly, b);
-        } else if (reportedContinuousCloses == 50) {
-            clearAnomalyHistory();
-        }
-    }
-
     public void sendBefrestBroadcast(Context context, int type, Bundle extras) {
         Intent intent = new Intent(BefrestPushReceiver.ACTION_BEFREST_PUSH);
         intent.putExtra(BefrestPushReceiver.BROADCAST_TYPE, type);
@@ -462,18 +373,37 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         BefLog.v(TAG, "broadcast sent::    type: " + type + "      permission:" + permission);
     }
 
-    public void reportOnOpen() {
-        BefLog.v(TAG, "reportOnOpen");
+    public void reportOnClose(Context context, int code) {
+        reportedContinuousCloses++;
+        BefLog.d(TAG, "reportOnClose :: total:" + reportedContinuousCloses + " code:" + code);
+        continuousClosesTypes += code + ",";
+        saveString(context, PREF_CONTINUOUS_CLOSES_TYPES, continuousClosesTypes);
+        saveInt(context, PREF_CONTINUOUS_CLOSES, reportedContinuousCloses);
+        if (System.currentTimeMillis() - connectAnomalyDataRecordingStartTime > WAIT_TIME_BEFORE_SENDING_CONNECT_ANOMLY_REPORT)
+            if (reportedContinuousCloses > 25) {
+                ACRACrashReport crash = new ACRACrashReport(context, "Connect Anomaly Report");
+                crash.addCustomData("ContiniousCloseTypes", continuousClosesTypes);
+                crash.addCustomData("LastSuccessfulConnectTime", "" + getPrefs(context).getLong(PREF_LAST_SUCCESSFUL_CONNECT_TIME, 0));
+                crash.addCustomData("SubscribeUri", getSubscribeUri());
+                for (NameValuePair valuePair : getSubscribeHeaders())
+                    crash.addCustomData(valuePair.getName(), valuePair.getValue());
+                crash.report();
+                clearAnomalyHistory();
+            }
+    }
+
+    public void reportOnOpen(Context context) {
+        saveLong(context, PREF_LAST_SUCCESSFUL_CONNECT_TIME, System.currentTimeMillis());
         clearAnomalyHistory();
     }
 
     private void clearAnomalyHistory() {
+        connectAnomalyDataRecordingStartTime = System.currentTimeMillis();
+        saveLong(context, PREF_CONNECT_ANOMALY_DATA_RECORDING_TIME, connectAnomalyDataRecordingStartTime);
         reportedContinuousCloses = 0;
         continuousClosesTypes = "";
-        Editor editor = context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE).edit();
-        editor.putString(PREF_CONTINUOUS_CLOSES_TYPES, continuousClosesTypes);
-        editor.putInt(PREF_CONTINUOUS_CLOSES, 0);
-        editor.commit();
+        saveString(context, PREF_CONTINUOUS_CLOSES_TYPES, continuousClosesTypes);
+        saveInt(context, PREF_CONTINUOUS_CLOSES, reportedContinuousCloses);
     }
 
     class BefrestIllegalArgumentException extends IllegalArgumentException {
