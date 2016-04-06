@@ -68,6 +68,7 @@ class BefrestConnection extends Handler {
     private List<NameValuePair> mWsHeaders;
     private WebSocket.ConnectionHandler mWsHandler;
     protected WebSocketOptions mOptions;
+    private ACRABoundedLinkedList<String> lastReceivedMesseges;
 
     private boolean refreshRequested;
 
@@ -179,6 +180,7 @@ class BefrestConnection extends Handler {
         this.mContext = context.getApplicationContext();
         parseWebsocketUri(url, headers);
         pushService = ((BefrestInvocHandler) Proxy.getInvocationHandler(BefrestFactory.getInternalInstance(mContext))).obj.pushService;
+        lastReceivedMesseges = new ACRABoundedLinkedList<>(5);
     }
 
     public void setKeepPingingAlarm(int pingDelay) {
@@ -229,13 +231,24 @@ class BefrestConnection extends Handler {
         sendMessage(msg);
     }
 
+    public boolean isNewMessage(String msgId) {
+        if (lastReceivedMesseges.contains(msgId))
+            return false;
+        return true;
+    }
+
     public void handleMsgFromReaderWriter(WebSocketMessage.Message msg) {
         if (msg instanceof WebSocketMessage.TextMessage) {
             WebSocketMessage.TextMessage textMessage = (WebSocketMessage.TextMessage) msg;
-
             revisePinging();
-            mWsHandler.onTextMessage(textMessage.mPayload);
-
+            BefLog.d(TAG, "rawMsg: " + textMessage.mPayload);
+            BefrestMessage bmsg = new BefrestMessage(textMessage.mPayload);
+            if (bmsg.msgId != null) {
+                mWriter.forward(new WebSocketMessage.TextMessage("A" + bmsg.msgId));
+                if (isNewMessage(bmsg.msgId))
+                    mWsHandler.onBefrestMessage(bmsg);
+            } else
+                mWsHandler.onBefrestMessage(bmsg);
         } else if (msg instanceof WebSocketMessage.RawTextMessage) {
 
             WebSocketMessage.RawTextMessage rawTextMessage = (WebSocketMessage.RawTextMessage) msg;

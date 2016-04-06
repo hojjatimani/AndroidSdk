@@ -68,8 +68,10 @@ class WebSocketConnectionHandler implements WebSocket.ConnectionHandler {
 
     /**
      * Fired when connection was refreshed
-     *
      */
     public void onConnectionRefreshed() {
+    }
+
+    public void onBefrestMessage(BefrestMessage msg) {
     }
 }

@@ -92,7 +92,7 @@ interface WebSocket {
          *
          * @param payload Text message payload or null (empty payload).
          */
-        public void onTextMessage(String payload);
+//        public void onTextMessage(String payload);
 
         /**
          * Fired when a text message has been received (and text
@@ -111,9 +111,14 @@ interface WebSocket {
 
         /**
          * Fired when a pong message has been received.
-         *
          */
         public void onConnectionRefreshed();
+
+        /**
+         *
+         * @param msg
+         */
+        public void onBefrestMessage(BefrestMessage msg);
     }
 
     public void connect(String wsUri, ConnectionHandler wsHandler) throws WebSocketException;

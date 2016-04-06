@@ -243,10 +243,11 @@ public class PushService extends Service {
             }
 
             @Override
-            public void onTextMessage(String message) {
-                BefrestMessage msg = new BefrestMessage(message);
+            public void onBefrestMessage(BefrestMessage msg) {
                 switch (msg.type) {
                     case DATA:
+                    case TOPIC:
+                    case GROUP:
                         BefLog.i(TAG, "Befrest Push Received:: " + msg);
                         receivedMessages.add(msg);
                         if (!isBachReceiveMode)

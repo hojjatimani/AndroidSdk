@@ -25,45 +25,64 @@ public final class BefrestMessage implements Parcelable {
     private static final String TAG = BefLog.TAG_PREF + "BefrestMessage";
 
     /* package */ enum MsgType {
-        DATA, BATCH, PONG;
+        DATA, BATCH, PONG , TOPIC, GROUP;
     }
 
     /* package */ MsgType type;
     /* package */ String data;
     /* package */ String timeStamp;
+    /* package */ String msgId;
 
     /* package */ BefrestMessage(String rawMsg) {
         try {
-            parseMessageSdkVersion1(rawMsg);
+            JSONObject jsObject = new JSONObject(rawMsg);
+            parseMessageV2(jsObject);
         } catch (JSONException e) {
-            BefLog.d(TAG, "Could not parse message with sdk v1 structure");
-            parseMessageNotFormatted(rawMsg);
+            parseMessageNonFormatted(rawMsg);
         }
-        if(type == null || timeStamp == null || data == null){
-            parseMessageNotFormatted(rawMsg);
+
+        //if message could not be parsed
+        if (type == null || timeStamp == null || data == null)
+            parseMessageNonFormatted(rawMsg);
+    }
+
+    private void parseMessageV2(JSONObject jsObject) {
+        try {
+            msgId = jsObject.getString("messageId");
+            parseMessageV1(jsObject);
+        } catch (Exception e) {
+            parseMessageV1(jsObject);
         }
     }
 
-    private void parseMessageSdkVersion1(String rawMessage) throws JSONException {
-        JSONObject jsObject = new JSONObject(rawMessage);
-        switch (jsObject.getString("t")) {
-            case "0":
-                type = MsgType.PONG;
-                break;
-            case "1":
-                type = MsgType.DATA;
-                break;
-            case "2":
-                type = MsgType.BATCH;
-                break;
-            default:
-                BefLog.e(TAG, "BefrestImpl Internal ERROR! Unknown Received Push Type!!!");
+    private void parseMessageV1(JSONObject jsObject) {
+        try {
+            switch (jsObject.getString("t")) {
+                case "0":
+                    type = MsgType.PONG;
+                    break;
+                case "1":
+                    type = MsgType.DATA;
+                    break;
+                case "2":
+                    type = MsgType.BATCH;
+                    break;
+                case "3":
+                    type = MsgType.TOPIC;
+                    break;
+                case "4":
+                    type = MsgType.GROUP;
+                    break;
+                default:
+                    BefLog.w(TAG, "Unknown Push Type!!!");
+            }
+            data = BefrestImpl.Util.decodeBase64(jsObject.getString("m"));
+            timeStamp = jsObject.getString("ts");
+        } catch (Exception e) {
         }
-        data = BefrestImpl.Util.decodeBase64(jsObject.getString("m"));
-        timeStamp = jsObject.getString("ts");
     }
 
-    private void parseMessageNotFormatted(String rawMessage) {
+    private void parseMessageNonFormatted(String rawMessage) {
         type = MsgType.DATA;
         data = rawMessage;
         timeStamp = "unKnown";
