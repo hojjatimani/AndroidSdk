@@ -33,7 +33,6 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
     static final int UNAUTHORIZED = 1;
     static final int CONNECTION_REFRESHED = 2;
     static final int BEFREST_CONNECTED = 3;
-    static final int Anomaly = 4;
     static final String BROADCAST_TYPE = "BROADCAST_TYPE";
     static final String ACTION_BEFREST_PUSH = "rest.bef.broadcasts.ACTION_BEFREST_PUSH";
     static final String KEY_TIME_SENT = "KEY_TIME_SENT";
@@ -58,9 +57,6 @@ public abstract class BefrestPushReceiver extends BroadcastReceiver {
                 break;
             case BEFREST_CONNECTED:
                 onBefrestConnected(context);
-                break;
-            case Anomaly:
-                onAnomaly(context, "" + intent.getStringExtra(BefrestImpl.Util.KEY_MESSAGE_PASSED));
                 break;
             default:
                 BefLog.e(TAG, "BefrestImpl Internal ERROR! Unknown BefrestImpl Action!!");
