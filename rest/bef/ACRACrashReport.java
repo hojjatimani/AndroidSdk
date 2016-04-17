@@ -75,6 +75,10 @@ final class ACRACrashReport {
 
     private final Map<String, String> customData = new HashMap<String, String>();
 
+    public void setHandled(boolean b) {
+        addCustomData("Handled", "" + b);
+    }
+
     /**
      * Sets additional values to be added to {@code CUSTOM_DATA}. Values
      * specified here take precedence over globally specified custom data.

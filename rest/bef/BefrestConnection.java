@@ -216,10 +216,9 @@ class BefrestConnection extends Handler {
             }
         } catch (Throwable t) {
             BefLog.e(TAG, "unExpected Exception!");
-            ACRACrashReport crash = new ACRACrashReport(mContext);
+            ACRACrashReport crash = new ACRACrashReport(mContext, t);
             crash.message = "Exception in BefrestConnection";
-            crash.exception = t;
-            crash.uncaughtExceptionThread = Thread.currentThread();
+            crash.setHandled(false);
             crash.report();
             throw t;
         }
@@ -243,7 +242,7 @@ class BefrestConnection extends Handler {
             revisePinging();
             BefLog.d(TAG, "rawMsg: " + textMessage.mPayload);
             BefrestMessage bmsg = new BefrestMessage(textMessage.mPayload);
-            if (bmsg.msgId != null && bmsg.type != BefrestMessage.MsgType.BATCH) {
+            if (bmsg.msgId != null && bmsg.type != BefrestMessage.MsgType.BATCH && bmsg.type != BefrestMessage.MsgType.PONG) {
                 mWriter.forward(new WebSocketMessage.TextMessage("A" + bmsg.msgId));
                 if (isNewMessage(bmsg.msgId)) {
                     lastReceivedMesseges.add(bmsg.msgId);
@@ -555,6 +554,9 @@ class BefrestConnection extends Handler {
             return true;
         else {
             BefLog.e(TAG, "message from invalid Reader/Writer. message.getClass.getSimpleName = " + msg.getClass().getSimpleName());
+            ACRACrashReport report = new ACRACrashReport(mContext,new Exception("(handled) Message from invalid Reader/Writer"));
+            report.message = "(handled) Message from invalid Reader/Writer";
+            report.setHandled(true);
             return false;
         }
     }

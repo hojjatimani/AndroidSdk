@@ -124,6 +124,7 @@ public class PushService extends Service {
             } catch (Throwable t) {
                 ACRACrashReport crash = new ACRACrashReport(PushService.this, t);
                 crash.message = "Exception while handling broadcast received via PushService>screenAndConnectionStateBroadCastReceiver";
+                crash.setHandled(false);
                 crash.report();
                 throw t;
             }
@@ -221,6 +222,7 @@ public class PushService extends Service {
                 } catch (Throwable t) {
                     ACRACrashReport crash = new ACRACrashReport(PushService.this, t);
                     crash.message = "Exception while handling a job in PushService>Handler";
+                    crash.setHandled(false);
                     crash.report();
                     throw t;
                 }

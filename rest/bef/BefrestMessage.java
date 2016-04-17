@@ -50,6 +50,7 @@ public final class BefrestMessage implements Parcelable {
         try {
             msgId = jsObject.getString("messageId");
         } catch (Exception e) {
+            msgId = null;
         }
         parseMessageV1(jsObject);
     }

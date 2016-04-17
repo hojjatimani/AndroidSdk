@@ -624,7 +624,7 @@ class WebSocketReader extends Thread {
     /**
      * Consume data buffered in mFrameBuffer.
      */
-    private boolean consumeData() throws Exception{
+    private boolean consumeData() throws Exception {
 
         if (mState == STATE_OPEN || mState == STATE_CLOSING) {
             return processData();
@@ -652,7 +652,6 @@ class WebSocketReader extends Thread {
         BefLog.d(TAG, "Running");
 
         try {
-
             mFrameBuffer.clear();
             byte readbuff[] = new byte[mFrameBuffer.capacity()];
             do {
@@ -662,7 +661,9 @@ class WebSocketReader extends Thread {
                 if (len > 0) {
                     mFrameBuffer.put(readbuff, 0, len);
                     // process buffered data
-                    while (consumeData()) {};
+                    while (consumeData()) {
+                    }
+                    ;
                 } else if (mState == STATE_CLOSED) {
                     mStopped = true;
                 } else if (len < 0) {
@@ -694,27 +695,46 @@ class WebSocketReader extends Thread {
             // wrap the exception and notify master
             notify(new WebSocketMessage.ConnectionLost());
         } catch (Exception e) {
-            BefLog.e(TAG, "unExpected Exception! (handled)");
+            BefLog.e(TAG, "(handled) unExpected Exception!");
             // wrap the exception and notify master
             notify(new WebSocketMessage.Error(e));
 
-            ACRACrashReport crash = new ACRACrashReport(context);
-            crash.message = "Exception in WebSocketReader. (handled)";
-            crash.exception = e;
-            crash.uncaughtExceptionThread = Thread.currentThread();
+            ACRACrashReport crash = new ACRACrashReport(context, e);
+            crash.message = "(handled) Exception in WebSocketReader.";
+            crash.setHandled(true);
             crash.report();
-        }catch (Throwable t){
-            BefLog.e(TAG, "unExpected Exception! (unHandled)");
-            ACRACrashReport crash = new ACRACrashReport(context);
-            crash.message = "Exception in WebSocketReader.";
-            crash.exception = t;
-            crash.uncaughtExceptionThread = Thread.currentThread();
-            crash.report();
-            throw  t;
-        }
-        finally {
+        } catch (Throwable t) {
+            BefLog.e(TAG, t);
+            ACRACrashReport crash = new ACRACrashReport(context, t);
+            if (isAssersionErrorCausedByNoSuchAlgorithm(t)) {
+                if (reportedNoSuchAlgorithmInThisSession < 2) {
+                    reportedNoSuchAlgorithmInThisSession ++;
+                    crash.message = "(handled) NoSuchAlgorithmException : MD5 implementation not found while ssl handshake process (Nazdika#954)";
+                    crash.setHandled(true);
+                    crash.report();
+                    notify(new WebSocketMessage.Error(new Exception(t)));
+                } else {
+                    crash.message = "NoSuchAlgorithmException : MD5 implementation not found while ssl handshake process (Nazdika#954)";
+                    crash.setHandled(false);
+                    crash.report();
+                    throw t;
+                }
+            } else {
+                crash.message = "Exception in WebSocketReader.";
+                crash.setHandled(false);
+                crash.report();
+                throw t;
+            }
+        } finally {
             mStopped = true;
         }
+
         BefLog.v(TAG, "ended");
     }
+
+    private boolean isAssersionErrorCausedByNoSuchAlgorithm(Throwable t) {
+        return t instanceof AssertionError && t.getCause() instanceof java.security.NoSuchAlgorithmException;
+    }
+
+    private int reportedNoSuchAlgorithmInThisSession = 0;
 }

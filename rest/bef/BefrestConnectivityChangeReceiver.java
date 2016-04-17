@@ -42,6 +42,7 @@ public final class BefrestConnectivityChangeReceiver extends BroadcastReceiver {
         }catch (Throwable t){
             ACRACrashReport crash = new ACRACrashReport(context, t);
             crash.message = "Exception while handling broadcast received via BefrestConnectivityChangeReceiver";
+            crash.setHandled(false);
             crash.report();
             throw t;
         }

@@ -435,17 +435,15 @@ class WebSocketWriter extends Handler {
             Log.e(TAG, "unExpected Exception! (handled)");
             // wrap the exception and notify master
             notify(new WebSocketMessage.Error(e));
-            ACRACrashReport crash = new ACRACrashReport(context);
-            crash.message = "Exception in WebSocketWriter. (handled)";
-            crash.exception = e;
-            crash.uncaughtExceptionThread = Thread.currentThread();
+            ACRACrashReport crash = new ACRACrashReport(context, e);
+            crash.message = "(handled) Exception in WebSocketWriter.";
+            crash.setHandled(true);
             crash.report();
         } catch (Throwable t) {
-            Log.e(TAG, "unExpected Exception! (unHandled)");
-            ACRACrashReport crash = new ACRACrashReport(context);
-            crash.message = "Exception in WebSocketWriter. (handled)";
-            crash.exception = t;
-            crash.uncaughtExceptionThread = Thread.currentThread();
+            Log.e(TAG, "unExpected Exception!");
+            ACRACrashReport crash = new ACRACrashReport(context, t);
+            crash.message = "Exception in WebSocketWriter.";
+            crash.setHandled(false);
             crash.report();
             throw t;
         }

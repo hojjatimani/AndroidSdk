@@ -46,6 +46,7 @@ class BefrestInvocHandler implements InvocationHandler {
         } catch (Throwable t) {
             ACRACrashReport crash = new ACRACrashReport(context, t);
             crash.message = "Exception while invoking " + method.getName() + "on BefrestImpl";
+            crash.setHandled(false);
             crash.report();
             throw t;
         }
