@@ -69,7 +69,7 @@ class ACRACrashReportSender {
         private static final String TAG = BefLog.TAG_PREF + "CrashSender";
         File[] reports;
 
-        public CrashSender(File[] reports) {
+        public  CrashSender(File[] reports) {
             this.reports = reports;
         }
 

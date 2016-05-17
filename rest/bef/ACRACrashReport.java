@@ -37,39 +37,33 @@ import static rest.bef.ACRAConstants.*;
 import static rest.bef.ACRAReportField.*;
 import static rest.bef.BefrestPrefrences.PREF_CH_ID;
 import static rest.bef.BefrestPrefrences.PREF_U_ID;
-
-/**
- * Fluent API used to assemble the different options used for a crash handleException.
- *
- * @since 4.8.0
- */
 final class ACRACrashReport {
     private static final String TAG = "ACRACrashReport";
 
-    Context context;
+    Context appContext;
     String message;
     Thread uncaughtExceptionThread;
     Throwable exception;
 
     public ACRACrashReport(Context context) {
-        this.context = context;
+        this.appContext = context.getApplicationContext();
     }
 
     public ACRACrashReport(Context context, Throwable exception) {
         this.exception = exception;
-        this.context = context;
+        this.appContext = context;
         this.uncaughtExceptionThread = Thread.currentThread();
     }
 
     public ACRACrashReport(Context context, String message, Thread uncaughtExceptionThread, Throwable exception) {
-        this.context = context;
+        this.appContext = context.getApplicationContext();
         this.message = message;
         this.uncaughtExceptionThread = uncaughtExceptionThread;
         this.exception = exception;
     }
 
     public ACRACrashReport(Context context, String message) {
-        this.context = context;
+        this.appContext = context.getApplicationContext();
         this.message = message;
     }
 
@@ -109,6 +103,11 @@ final class ACRACrashReport {
      */
     public void report() {
         BefLog.d(TAG, "Generating Crash Report...");
+        try {
+            addCustomData("ANDROID_SKD_VERSION_NAME", BefLog.SDK_VERSION_NAME);
+            addCustomData("SDK_VERSION" , "" + BefrestInternal.Util.SDK_VERSION);
+            addCustomData("ANDROID_ID", Settings.Secure.getString(appContext.getContentResolver(), Settings.Secure.ANDROID_ID));
+        }catch (Throwable t){}
         final ACRACrashReportData crashReportData = createCrashData();
         final File reportFile = getReportFileName(crashReportData);
         saveCrashReportFile(reportFile, crashReportData);
@@ -121,7 +120,7 @@ final class ACRACrashReport {
                 + (timestamp != null ? timestamp : new Date().getTime()) // Need to check for null because old version of ACRA did not always capture USER_CRASH_DATE
                 + (isSilent != null ? ACRAConstants.SILENT_SUFFIX : "")
                 + ACRAConstants.REPORTFILE_EXTENSION;
-        final ACRAReportLocator reportLocator = new ACRAReportLocator(context);
+        final ACRAReportLocator reportLocator = new ACRAReportLocator(appContext);
         return new File(reportLocator.getUnapprovedFolder(), fileName);
     }
 
@@ -151,7 +150,7 @@ final class ACRACrashReport {
 
             // Collect DropBox and logcat. This is done first because some ROMs spam the log with every get on
             // Settings.
-            final ACRAPackageManagerWrapper pm = new ACRAPackageManagerWrapper(context);
+            final ACRAPackageManagerWrapper pm = new ACRAPackageManagerWrapper(appContext);
 
             // Before JellyBean, this required the READ_LOGS permission
             // Since JellyBean, READ_LOGS is not granted to third-party apps anymore for security reasons.
@@ -221,11 +220,11 @@ final class ACRACrashReport {
             // Installation unique ID
             if (crashReportFields.contains(INSTALLATION_ID)) {
                 try {
-                    //hojjat: i will use channelId-ANDROID_ID
-                    SharedPreferences prefs = BefrestPrefrences.getPrefs(context);
+                    //hojjat: i will use channelId-PLATFORM
+                    SharedPreferences prefs = BefrestPrefrences.getPrefs(appContext);
                     long uId = prefs.getLong(PREF_U_ID, -1);
                     String chId = prefs.getString(PREF_CH_ID, "chId");
-                    String installationId = uId + "-" + chId + "-" + Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
+                    String installationId = uId + "-" + chId + "-" + "android";
                     crashReportData.put(INSTALLATION_ID, installationId);
                 } catch (RuntimeException e) {
                     BefLog.e(TAG, "Error while retrieving INSTALLATION_ID data", e);
@@ -235,14 +234,14 @@ final class ACRACrashReport {
             // Device Configuration when crashing
             if (crashReportFields.contains(INITIAL_CONFIGURATION)) {
                 try {
-                    crashReportData.put(INITIAL_CONFIGURATION, ACRAConfigurationCollector.collectConfiguration(context));
+                    crashReportData.put(INITIAL_CONFIGURATION, ACRAConfigurationCollector.collectConfiguration(appContext));
                 } catch (RuntimeException e) {
                     BefLog.e(TAG, "Error while retrieving INITIAL_CONFIGURATION data", e);
                 }
             }
             if (crashReportFields.contains(CRASH_CONFIGURATION)) {
                 try {
-                    crashReportData.put(CRASH_CONFIGURATION, ACRAConfigurationCollector.collectConfiguration(context));
+                    crashReportData.put(CRASH_CONFIGURATION, ACRAConfigurationCollector.collectConfiguration(appContext));
                 } catch (RuntimeException e) {
                     BefLog.e(TAG, "Error while retrieving CRASH_CONFIGURATION data", e);
                 }
@@ -260,7 +259,7 @@ final class ACRACrashReport {
             // Application Package name
             if (crashReportFields.contains(PACKAGE_NAME)) {
                 try {
-                    crashReportData.put(PACKAGE_NAME, context.getPackageName());
+                    crashReportData.put(PACKAGE_NAME, appContext.getPackageName());
                 } catch (RuntimeException e) {
                     BefLog.e(TAG, "Error while retrieving PACKAGE_NAME data", e);
                 }
@@ -327,7 +326,7 @@ final class ACRACrashReport {
             // Application file path
             if (crashReportFields.contains(FILE_PATH)) {
                 try {
-                    crashReportData.put(FILE_PATH, ACRAReportUtils.getApplicationFilePath(context));
+                    crashReportData.put(FILE_PATH, ACRAReportUtils.getApplicationFilePath(appContext));
                 } catch (RuntimeException e) {
                     BefLog.e(TAG, "Error while retrieving FILE_PATH data", e);
                 }
@@ -336,7 +335,7 @@ final class ACRACrashReport {
             // Main display details
             if (crashReportFields.contains(DISPLAY)) {
                 try {
-                    crashReportData.put(DISPLAY, ACRADisplayManagerCollector.collectDisplays(context));
+                    crashReportData.put(DISPLAY, ACRADisplayManagerCollector.collectDisplays(appContext));
                 } catch (RuntimeException e) {
                     BefLog.e(TAG, "Error while retrieving DISPLAY data", e);
                 }
@@ -354,7 +353,7 @@ final class ACRACrashReport {
             // Device features
             if (crashReportFields.contains(DEVICE_FEATURES)) {
                 try {
-                    crashReportData.put(DEVICE_FEATURES, ACRADeviceFeaturesCollector.getFeatures(context));
+                    crashReportData.put(DEVICE_FEATURES, ACRADeviceFeaturesCollector.getFeatures(appContext));
                 } catch (RuntimeException e) {
                     BefLog.e(TAG, "Error while retrieving DEVICE_FEATURES data", e);
                 }
@@ -369,7 +368,7 @@ final class ACRACrashReport {
                 }
             }
 
-            final ACRASettingsCollector settingsCollector = new ACRASettingsCollector(context);
+            final ACRASettingsCollector settingsCollector = new ACRASettingsCollector(appContext);
             // System settings
             if (crashReportFields.contains(SETTINGS_SYSTEM)) {
                 try {
@@ -401,7 +400,7 @@ final class ACRACrashReport {
             // SharedPreferences
             if (crashReportFields.contains(SHARED_PREFERENCES)) {
                 try {
-                    crashReportData.put(SHARED_PREFERENCES, new ACRASharedPreferencesCollector(context).collect());
+                    crashReportData.put(SHARED_PREFERENCES, new ACRASharedPreferencesCollector(appContext).collect());
                 } catch (RuntimeException e) {
                     BefLog.e(TAG, "Error while retrieving SHARED_PREFERENCES data", e);
                 }
@@ -430,7 +429,7 @@ final class ACRACrashReport {
             // Retrieve UDID(IMEI) if permission is available
             if (crashReportFields.contains(DEVICE_ID) && pm.hasPermission(Manifest.permission.READ_PHONE_STATE)) {
                 try {
-                    final String deviceId = ACRAReportUtils.getDeviceId(context);
+                    final String deviceId = ACRAReportUtils.getDeviceId(appContext);
                     if (deviceId != null) {
                         crashReportData.put(DEVICE_ID, deviceId);
                     }

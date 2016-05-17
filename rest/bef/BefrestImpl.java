@@ -41,7 +41,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
 
     BefrestImpl(Context context) {
         this.context = context.getApplicationContext();
-        SharedPreferences prefs = BefrestPrefrences.getPrefs(context);
+        SharedPreferences prefs = getPrefs(context);
         uId = prefs.getLong(PREF_U_ID, -1);
         chId = prefs.getString(PREF_CH_ID, null);
         auth = prefs.getString(PREF_AUTH, null);
@@ -352,6 +352,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         if (authHeader == null) {
             authHeader = new NameValuePair("X-BF-AUTH", auth);
         }
+        BefLog.v(TAG, "AuthToken: " + auth);
         return authHeader;
     }
 

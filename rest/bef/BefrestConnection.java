@@ -35,15 +35,13 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.util.List;
+import java.util.Random;
 
 import javax.net.ssl.HandshakeCompletedEvent;
 import javax.net.ssl.HandshakeCompletedListener;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
-/**
- * Created by hojjatimani on 2/25/2016 AD.
- */
 class BefrestConnection extends Handler {
     private static final String TAG = BefLog.TAG_PREF + "BefrestConnection";
 
@@ -51,7 +49,7 @@ class BefrestConnection extends Handler {
     public static final String connectWakeLockName = "befrstconnectwakelock";
 
     Looper mLooper;
-    Context mContext;
+    Context appContext;
 
     Class<?> pushService;
 
@@ -68,7 +66,7 @@ class BefrestConnection extends Handler {
     private List<NameValuePair> mWsHeaders;
     private WebSocket.ConnectionHandler mWsHandler;
     protected WebSocketOptions mOptions;
-    private ACRABoundedLinkedList<String> lastReceivedMesseges;
+    private MessageIdPersister lastReceivedMesseges;
 
     private boolean refreshRequested;
 
@@ -93,7 +91,7 @@ class BefrestConnection extends Handler {
     private Runnable sendPing = new Runnable() {
         @Override
         public void run() {
-            mContext.startService(new Intent(mContext, pushService).putExtra(PushService.PING, true));
+            appContext.startService(new Intent(appContext, pushService).putExtra(PushService.PING, true));
         }
     };
 
@@ -165,7 +163,6 @@ class BefrestConnection extends Handler {
     }
 
     private void setNextPingToSendInFuture(int interval) {
-//        cancelFuturePing(); //cancel any previous ping set
         BefLog.v(TAG, "setNextPingToSendInFuture()  interval : " + interval);
         lastPingSetTime = System.currentTimeMillis();
         postDelayed(sendPing, interval);
@@ -177,29 +174,41 @@ class BefrestConnection extends Handler {
         super(looper);
         this.mLooper = looper;
         this.mWsHandler = wsHandler;
-        this.mContext = context.getApplicationContext();
+        this.appContext = context.getApplicationContext();
         parseWebsocketUri(url, headers);
-        pushService = ((BefrestInvocHandler) Proxy.getInvocationHandler(BefrestFactory.getInternalInstance(mContext))).obj.pushService;
-        lastReceivedMesseges = new ACRABoundedLinkedList<>(5);
+        pushService = ((BefrestInvocHandler) Proxy.getInvocationHandler(BefrestFactory.getInternalInstance(appContext))).obj.pushService;
+        lastReceivedMesseges = new MessageIdPersister(appContext);
+        BefLog.v(TAG, "lastReceivedMessages: " + lastReceivedMesseges);
     }
 
     public void setKeepPingingAlarm(int pingDelay) {
         int delay = (pingDelay * 2) + 60000;
-        AlarmManager alarmMgr = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);
-        Intent intent = new Intent(mContext, pushService).putExtra(PushService.KEEP_PINGING, true);
-        PendingIntent pi = PendingIntent.getService(mContext, BefrestImpl.KEEP_PINGING_ALARM_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        AlarmManager alarmMgr = (AlarmManager) appContext.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(appContext, pushService).putExtra(PushService.KEEP_PINGING, true);
+        PendingIntent pi = PendingIntent.getService(appContext, BefrestImpl.KEEP_PINGING_ALARM_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT);
         long triggerAtMillis = SystemClock.elapsedRealtime() + delay;
         alarmMgr.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAtMillis, pi);
         BefLog.d(TAG, "KeepPinging alarm set for " + delay + " ms");
     }
 
     public void cancelKeepPingingAlarm() {
-        AlarmManager alarmMgr = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);
-        Intent intent = new Intent(mContext, pushService).putExtra(PushService.KEEP_PINGING, true);
-        PendingIntent pi = PendingIntent.getService(mContext, BefrestImpl.KEEP_PINGING_ALARM_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-        alarmMgr.cancel(pi);
-        pi.cancel();
+        AlarmManager alarmMgr = (AlarmManager) appContext.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(appContext, pushService).putExtra(PushService.KEEP_PINGING, true);
+        PendingIntent pi = PendingIntent.getService(appContext, BefrestImpl.KEEP_PINGING_ALARM_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        if (pi == null)
+            reportNullPendingIntent();
+        else {
+            alarmMgr.cancel(pi);
+            pi.cancel();
+        }
         BefLog.d(TAG, "KeepPinging alarm canceled");
+    }
+
+    private void reportNullPendingIntent() {
+        ACRACrashReport crash = new ACRACrashReport(appContext, new Exception("Pending intent was null in cancelKeepPingingAlarm"));
+        crash.message = "(handled) pending intent was null";
+        crash.setHandled(true);
+        crash.report();
     }
 
     @Override
@@ -211,12 +220,10 @@ class BefrestConnection extends Handler {
             } else if (msg.obj instanceof BefrestEvent) {
                 //msg from push service
                 handleBefrestEvent(((BefrestEvent) msg.obj));
-            } else {
-                //unknown! should not come here!
             }
         } catch (Throwable t) {
             BefLog.e(TAG, "unExpected Exception!");
-            ACRACrashReport crash = new ACRACrashReport(mContext, t);
+            ACRACrashReport crash = new ACRACrashReport(appContext, t);
             crash.message = "Exception in BefrestConnection";
             crash.setHandled(false);
             crash.report();
@@ -230,10 +237,13 @@ class BefrestConnection extends Handler {
         sendMessage(msg);
     }
 
-    public boolean isNewMessage(String msgId) {
-        if (lastReceivedMesseges.contains(msgId))
-            return false;
-        return true;
+    private boolean isNewMessage(String msgId) {
+        return !lastReceivedMesseges.contains(msgId);
+    }
+
+    private void sendAck(String ack) {
+        mWriter.forward(new WebSocketMessage.TextMessage(ack));
+        BefLog.v(TAG, "Ack sent : " + ack);
     }
 
     public void handleMsgFromReaderWriter(WebSocketMessage.Message msg) {
@@ -241,12 +251,15 @@ class BefrestConnection extends Handler {
             WebSocketMessage.TextMessage textMessage = (WebSocketMessage.TextMessage) msg;
             revisePinging();
             BefLog.d(TAG, "rawMsg: " + textMessage.mPayload);
-            BefrestMessage bmsg = new BefrestMessage(textMessage.mPayload);
+            BefrestMessage bmsg = new BefrestMessage(appContext, textMessage.mPayload);
+            if (bmsg.isCorrupted)
+                return;
             if (bmsg.msgId != null && bmsg.type != BefrestMessage.MsgType.BATCH && bmsg.type != BefrestMessage.MsgType.PONG) {
-                mWriter.forward(new WebSocketMessage.TextMessage("A" + bmsg.msgId));
+                sendAck(bmsg.getAckMessage());
                 if (isNewMessage(bmsg.msgId)) {
                     lastReceivedMesseges.add(bmsg.msgId);
                     mWsHandler.onBefrestMessage(bmsg);
+                    lastReceivedMesseges.save();
                 }
             } else
                 mWsHandler.onBefrestMessage(bmsg);
@@ -273,16 +286,14 @@ class BefrestConnection extends Handler {
 
         } else if (msg instanceof WebSocketMessage.Pong) {
             WebSocketMessage.Pong pong = (WebSocketMessage.Pong) msg;
-            if (isMessageFromValidReaderWriter(msg))
-                onPong(new String(pong.mPayload, Charset.defaultCharset()));
+            onPong(new String(pong.mPayload, Charset.defaultCharset()));
 
         } else if (msg instanceof WebSocketMessage.Close) {
 
             WebSocketMessage.Close close = (WebSocketMessage.Close) msg;
             BefLog.v(TAG, "WebSockets Close received (" + close.mCode + " - " + close.mReason + ")");
             final int closeCode = (close.mCode == 1000) ? WebSocket.ConnectionHandler.CLOSE_NORMAL : WebSocket.ConnectionHandler.CLOSE_CONNECTION_LOST;
-            if (isMessageFromValidReaderWriter(msg))
-                disconnectAndNotify(closeCode, close.mReason);
+            disconnectAndNotify(closeCode, close.mReason);
         } else if (msg instanceof WebSocketMessage.ServerHandshake) {
 
             WebSocketMessage.ServerHandshake serverHandshake = (WebSocketMessage.ServerHandshake) msg;
@@ -290,13 +301,24 @@ class BefrestConnection extends Handler {
             removeCallbacks(disconnectIfWebSocketHandshakeTimeOut);
 
             if (serverHandshake.mSuccess) {
-                if (isMessageFromValidReaderWriter(msg)) {
+                try {
                     mWsHandler.onOpen();
-                    postDelayed(releaseConnectWakeLock, 2000);
-                    notifyConnectionRefreshedIfNeeded();
-                    prevSuccessfulPings = 0;
-                    setNextPingToSendInFuture();
+                } catch (Exception e) {
+                    BefLog.e(TAG, e);
+                    ACRACrashReport crash = new ACRACrashReport(appContext, e);
+                    crash.message = "(handled) exception in calling mWsHandler.onOpen()";
+                    if (e instanceof NullPointerException) crash.message += " (Nazdika#1021)";
+                    crash.setHandled(true);
+                    crash.report();
+                    Befrest b = BefrestFactory.getInstance(appContext);
+                    b.stop();
+                    b.start();
                 }
+                postDelayed(releaseConnectWakeLock, 2000);
+                notifyConnectionRefreshedIfNeeded();
+                prevSuccessfulPings = 0;
+                setNextPingToSendInFuture();
+
             } else {
                 BefLog.w(TAG, "could not call onOpen() .. serverHandshake was not successful");
             }
@@ -304,21 +326,18 @@ class BefrestConnection extends Handler {
         } else if (msg instanceof WebSocketMessage.ConnectionLost) {
             @SuppressWarnings("unused")
             WebSocketMessage.ConnectionLost connnectionLost = (WebSocketMessage.ConnectionLost) msg;
-            if (isMessageFromValidReaderWriter(msg))
-                disconnectAndNotify(WebSocketConnectionHandler.CLOSE_CONNECTION_LOST, "WebSockets connection lost");
+
+            disconnectAndNotify(WebSocketConnectionHandler.CLOSE_CONNECTION_LOST, "WebSockets connection lost");
         } else if (msg instanceof WebSocketMessage.ProtocolViolation) {
 
             @SuppressWarnings("unused")
             WebSocketMessage.ProtocolViolation protocolViolation = (WebSocketMessage.ProtocolViolation) msg;
-            if (isMessageFromValidReaderWriter(msg)) {
-                disconnectAndNotify(WebSocketConnectionHandler.CLOSE_PROTOCOL_ERROR, "WebSockets protocol violation");
-            }
+            disconnectAndNotify(WebSocketConnectionHandler.CLOSE_PROTOCOL_ERROR, "WebSockets protocol violation");
         } else if (msg instanceof WebSocketMessage.Error) {
 
             WebSocketMessage.Error error = (WebSocketMessage.Error) msg;
             BefLog.e(TAG, error.mException);
-            if (isMessageFromValidReaderWriter(msg))
-                disconnectAndNotify(WebSocketConnectionHandler.CLOSE_INTERNAL_ERROR, "WebSockets internal error (" + error.mException.toString() + ")");
+            disconnectAndNotify(WebSocketConnectionHandler.CLOSE_INTERNAL_ERROR, "WebSockets internal error (" + error.mException.toString() + ")");
 
         } else if (msg instanceof WebSocketMessage.ServerError) {
 
@@ -326,8 +345,7 @@ class BefrestConnection extends Handler {
             int errCode = WebSocketConnectionHandler.CLOSE_SERVER_ERROR;
             if (error.mStatusCode == 401)
                 errCode = WebSocketConnectionHandler.CLOSE_UNAUTHORIZED;
-            if (isMessageFromValidReaderWriter(msg))
-                disconnectAndNotify(errCode, "Server error " + error.mStatusCode + " (" + error.mStatusMessage + ")");
+            disconnectAndNotify(errCode, "Server error " + error.mStatusCode + " (" + error.mStatusMessage + ")");
         }
     }
 
@@ -382,7 +400,7 @@ class BefrestConnection extends Handler {
         BefLog.v(TAG, "--------------------------connect()_START--------------------");
         if (isConnected()) {
             BefLog.v(TAG, "already connected!");
-        } else if (mContext != null && !BefrestImpl.Util.isConnectedToInternet(mContext)) {
+        } else if (appContext != null && !BefrestImpl.Util.isConnectedToInternet(appContext)) {
             BefLog.v(TAG, "no internet connection!");
         } else {
             acquireConnectWakeLockIfPossible();
@@ -458,7 +476,7 @@ class BefrestConnection extends Handler {
     protected void createWriter() {
         mWriterThread = new HandlerThread("WebSocketWriter");
         mWriterThread.start();
-        mWriter = new WebSocketWriter(mWriterThread.getLooper(), this, mTransportChannel, mOptions, mContext);
+        mWriter = new WebSocketWriter(mWriterThread.getLooper(), this, mTransportChannel, mOptions, appContext);
         BefLog.v(TAG, "WS writer created and started");
     }
 
@@ -467,7 +485,7 @@ class BefrestConnection extends Handler {
      * Create WebSockets background reader.
      */
     protected void createReader() {
-        mReader = new WebSocketReader(this, mTransportChannel, mOptions, "WebSocketReader", mContext);
+        mReader = new WebSocketReader(this, mTransportChannel, mOptions, "WebSocketReader", appContext);
         mReader.start();
         BefLog.v(TAG, "WS reader created and started");
     }
@@ -549,26 +567,14 @@ class BefrestConnection extends Handler {
         return res;
     }
 
-    private boolean isMessageFromValidReaderWriter(WebSocketMessage.Message msg) {
-        if (msg.senderId == System.identityHashCode(mReader) || msg.senderId == System.identityHashCode(mWriter))
-            return true;
-        else {
-            BefLog.e(TAG, "message from invalid Reader/Writer. message.getClass.getSimpleName = " + msg.getClass().getSimpleName());
-            ACRACrashReport report = new ACRACrashReport(mContext,new Exception("(handled) Message from invalid Reader/Writer"));
-            report.message = "(handled) Message from invalid Reader/Writer";
-            report.setHandled(true);
-            return false;
-        }
-    }
-
     private void acquireConnectWakeLockIfPossible() {
         removeCallbacks(releaseConnectWakeLock);
-        if (BefrestInternal.Util.isWakeLockPermissionGranted(mContext)) {
+        if (BefrestInternal.Util.isWakeLockPermissionGranted(appContext)) {
             if (connectWakelock != null) {
                 if (connectWakelock.isHeld())
                     return;
             } else {
-                PowerManager pm = (PowerManager) mContext.getSystemService(Context.POWER_SERVICE);
+                PowerManager pm = (PowerManager) appContext.getSystemService(Context.POWER_SERVICE);
                 connectWakelock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, connectWakeLockName);
                 connectWakelock.setReferenceCounted(false);
             }
@@ -579,7 +585,7 @@ class BefrestConnection extends Handler {
     }
 
     private void releaseConnectWakeLockIfNeeded() {
-        if (BefrestInternal.Util.isWakeLockPermissionGranted(mContext)) {
+        if (BefrestInternal.Util.isWakeLockPermissionGranted(appContext)) {
             if (connectWakelock != null && connectWakelock.isHeld()) {
                 connectWakelock.release();
                 BefLog.v(TAG, "connectWakeLock released manually");

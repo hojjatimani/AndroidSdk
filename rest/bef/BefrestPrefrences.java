@@ -1,3 +1,18 @@
+/******************************************************************************
+ * Copyright 2015-2016 Befrest
+ * <p/>
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package rest.bef;
 
 import android.content.Context;
@@ -8,9 +23,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Created by hojjatimani on 3/14/2016 AD.
- */
 class BefrestPrefrences {
 
     /**
@@ -27,6 +39,7 @@ class BefrestPrefrences {
     static final String PREF_CONTINUOUS_CLOSES_TYPES = "PREF_CONTINUOUS_CLOSES_TYPES";
     static final String PREF_LAST_SUCCESSFUL_CONNECT_TIME = "PREF_LAST_SUCCESSFUL_CONNECT_TIME";
     static final String PREF_CONNECT_ANOMALY_DATA_RECORDING_TIME = "PREF_CONNECT_ANOMALY_DATA_RECORDING_TIME";
+    static final String PREF_LAST_RECEIVED_MESSAGES = "PREF_LAST_RECEIVED_MESSAGES";
 
     static SharedPreferences getPrefs(Context context) {
         return context.getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);

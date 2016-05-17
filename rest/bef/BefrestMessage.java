@@ -15,6 +15,7 @@
  ******************************************************************************/
 package rest.bef;
 
+import android.content.Context;
 import android.os.Parcel;
 import android.os.Parcelable;
 
@@ -25,44 +26,53 @@ public final class BefrestMessage implements Parcelable {
     private static final String TAG = BefLog.TAG_PREF + "BefrestMessage";
 
     /* package */ enum MsgType {
-        DATA, BATCH, PONG, TOPIC, GROUP;
+        NORMAL, BATCH, PONG, TOPIC, GROUP;
     }
 
     /* package */ MsgType type;
     /* package */ String data;
     /* package */ String timeStamp;
     /* package */ String msgId;
+    /* package */ boolean isCorrupted;
 
-    /* package */ BefrestMessage(String rawMsg) {
+    /* package */ BefrestMessage(Context appContext, String rawMsg) {
         try {
             JSONObject jsObject = new JSONObject(rawMsg);
             parseMessageV2(jsObject);
-        } catch (JSONException e) {
-            parseMessageNonFormatted(rawMsg);
+        } catch (Exception e) { //JSONException or any other unExpected Exception
+            isCorrupted = true;
+            reportCorruptedMessageAnomaly(appContext, e);
         }
-
-        //if message could not be parsed
-        if (type == null || timeStamp == null || data == null)
-            parseMessageNonFormatted(rawMsg);
+        //last check if message is not properly parsed
+        if (type == null || timeStamp == null || data == null) {
+            isCorrupted = true;
+            reportCorruptedMessageAnomaly(appContext, null);
+        }
     }
 
-    private void parseMessageV2(JSONObject jsObject) {
+    private void reportCorruptedMessageAnomaly(Context c, Exception e){
+        ACRACrashReport crash = new ACRACrashReport(c, e);
+        crash.message = "(handled) Corrupted push message";
+        crash.setHandled(true);
+        crash.report();
+    }
+
+    private void parseMessageV2(JSONObject jsObject) throws JSONException{
         try {
-            msgId = jsObject.getString("messageId");
+            msgId = jsObject.getString("mid"); //if message is version 2
         } catch (Exception e) {
             msgId = null;
         }
         parseMessageV1(jsObject);
     }
 
-    private void parseMessageV1(JSONObject jsObject) {
-        try {
+    private void parseMessageV1(JSONObject jsObject) throws JSONException {
             switch (jsObject.getString("t")) {
                 case "0":
                     type = MsgType.PONG;
                     break;
                 case "1":
-                    type = MsgType.DATA;
+                    type = MsgType.NORMAL;
                     break;
                 case "2":
                     type = MsgType.BATCH;
@@ -74,18 +84,10 @@ public final class BefrestMessage implements Parcelable {
                     type = MsgType.GROUP;
                     break;
                 default:
-                    BefLog.w(TAG, "Unknown Push Type!!!");
+                    throw new JSONException("unKnown Push Type!");
             }
             data = BefrestImpl.Util.decodeBase64(jsObject.getString("m"));
             timeStamp = jsObject.getString("ts");
-        } catch (Exception e) {
-        }
-    }
-
-    private void parseMessageNonFormatted(String rawMessage) {
-        type = MsgType.DATA;
-        data = rawMessage;
-        timeStamp = "unKnown";
     }
 
     public String getData() {
@@ -94,6 +96,10 @@ public final class BefrestMessage implements Parcelable {
 
     public String getTimeStamp() {
         return timeStamp;
+    }
+
+    /* package */ String getAckMessage(){
+        return "A" + type.toString().charAt(0) + msgId;
     }
 
     @Override

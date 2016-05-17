@@ -14,8 +14,6 @@
  * limitations under the License.
  ******************************************************************************/
 
-
-
 package rest.bef;
 
 import android.os.Handler;

@@ -33,9 +33,6 @@ import android.view.Display;
 import java.io.UnsupportedEncodingException;
 import java.util.List;
 
-/**
- * Created by hojjatimani on 3/2/2016 AD.
- */
 interface BefrestInternal {
     int LOG_LEVEL_DEFAULT = Befrest.LOG_LEVEL_INFO;
 
@@ -61,11 +58,6 @@ interface BefrestInternal {
         private static final String BROADCAST_SENDING_PERMISSION_POSTFIX = ".permission.PUSH_SERVICE";
         static final int API_VERSION = 1;
         static final int SDK_VERSION = 1;
-        static long lastScreenOnTime;
-
-        private static WifiManager.WifiLock wifiLock;
-        private static PowerManager.WakeLock wakeLock = null;
-
 
         /**
          * Is device connected to Internet?
@@ -96,8 +88,8 @@ interface BefrestInternal {
         }
 
         static boolean isWifiConnected(Context context) {
-            ConnectivityManager connManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-            NetworkInfo mWifi = connManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+            ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo mWifi = cm.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
             return mWifi.isConnected();
         }
 
@@ -111,7 +103,7 @@ interface BefrestInternal {
             pm.setComponentEnabledSetting(receiver,
                     PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                     PackageManager.DONT_KILL_APP);
-            BefLog.v(TAG, "BefrestImpl Connectivity change listener disabled");
+            BefLog.v(TAG, "Befrest Connectivity change listener disabled");
         }
 
         static void enableConnectivityChangeListener(Context context) {
@@ -120,7 +112,7 @@ interface BefrestInternal {
             pm.setComponentEnabledSetting(receiver,
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                     PackageManager.DONT_KILL_APP);
-            BefLog.v(TAG, "BefrestImpl Connectivity change listener enabled");
+            BefLog.v(TAG, "Befrest Connectivity change listener enabled");
         }
 
         static String decodeBase64(String s) {

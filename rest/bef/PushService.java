@@ -1,38 +1,48 @@
 /**
  * Copyright 2015-2016 Befrest
- * <p>
+ * <p/>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p>
+ * <p/>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- * <p>
- * If receiving befrestProxy events through broadcast receiversdoes not meet
+ * <p/>
+ * If receiving befrest events through broadcast receivers does not meet
  * your needs you can implement your custom push service class that
- * extends this class and introduce it to befrestProxy using
+ * extends this class and introduce it to befrest using
  * {@code BefrestFactory.getInstance(context).setCustomPushService(YourCustomPushService.class)}
- * <p>
- * If receiving befrestProxy events through broadcast receiversdoes not meet
+ * <p/>
+ * If receiving befrest events through broadcast receivers does not meet
  * your needs you can implement your custom push service class that
- * extends this class and introduce it to befrestProxy using
+ * extends this class and introduce it to befrest using
  * {@code BefrestFactory.getInstance(context).setCustomPushService(YourCustomPushService.class)}
- * <p>
- * If receiving befrestProxy events through broadcast receiversdoes not meet
+ * <p/>
+ * If receiving befrest events through broadcast receivers does not meet
  * your needs you can implement your custom push service class that
- * extends this class and introduce it to befrestProxy using
+ * extends this class and introduce it to befrest using
+ * {@code BefrestFactory.getInstance(context).setCustomPushService(YourCustomPushService.class)}
+ * <p/>
+ * If receiving befrest events through broadcast receivers does not meet
+ * your needs you can implement your custom push service class that
+ * extends this class and introduce it to befrest using
+ * {@code BefrestFactory.getInstance(context).setCustomPushService(YourCustomPushService.class)}
+ * <p/>
+ * If receiving befrest events through broadcast receivers does not meet
+ * your needs you can implement your custom push service class that
+ * extends this class and introduce it to befrest using
  * {@code BefrestFactory.getInstance(context).setCustomPushService(YourCustomPushService.class)}
  */
 
 /**
- * If receiving befrestProxy events through broadcast receiversdoes not meet
+ * If receiving befrest events through broadcast receivers does not meet
  * your needs you can implement your custom push service class that
- * extends this class and introduce it to befrestProxy using
+ * extends this class and introduce it to befrest using
  * {@code BefrestFactory.getInstance(context).setCustomPushService(YourCustomPushService.class)}
  */
 package rest.bef;
@@ -44,7 +54,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Configuration;
 import android.net.ConnectivityManager;
-import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -55,7 +64,6 @@ import android.os.Parcelable;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 
 public class PushService extends Service {
     private static final String TAG = BefLog.TAG_PREF + "PushService";
@@ -74,7 +82,7 @@ public class PushService extends Service {
     //retrying variables and constants
     private boolean retryInProgress;
     private static final int[] RETRY_INTERVAL = {0, 2 * 1000, 5 * 1000, 10 * 1000, 18 * 1000, 40 * 1000, 100 * 1000, 240 * 1000};
-    private int prevFailedConnectTries;
+    private static int prevFailedConnectTries;
     private Runnable retry = new Runnable() {
         @Override
         public void run() {
@@ -83,8 +91,8 @@ public class PushService extends Service {
     };
 
     //bach mode variables and constants
-    public static final int TIME_PER_MESSAGE_IN_BATH_MODE = 10;
-    private static final int BATCH_MODE_TIMEOUT = 1000;
+    public static final int TIME_PER_MESSAGE_IN_BATH_MODE = 30;
+    private static final int BATCH_MODE_TIMEOUT = 3000;
     private static int batchSize;
     private boolean isBachReceiveMode;
 
@@ -114,7 +122,6 @@ public class PushService extends Service {
                         internalRefreshIfPossible();
                         break;
                     case Intent.ACTION_SCREEN_OFF:
-                        BefrestImpl.Util.lastScreenOnTime = System.currentTimeMillis();
                         break;
                     case ConnectivityManager.CONNECTIVITY_ACTION:
                         if (BefrestImpl.Util.isConnectedToInternet(context))
@@ -207,6 +214,7 @@ public class PushService extends Service {
     @Override
     public final void onCreate() {
         BefLog.v(TAG, "PushService: " + System.identityHashCode(this) + "  onCreate()");
+        prevFailedConnectTries = 0;
         befrestProxy = BefrestFactory.getInternalInstance(this);
         befrestActual = ((BefrestInvocHandler) Proxy.getInvocationHandler(befrestProxy)).obj;
         createWebsocketConnectionHanlder();
@@ -234,12 +242,13 @@ public class PushService extends Service {
 
     private void createWebsocketConnectionHanlder() {
         wscHandler = new WebSocketConnectionHandler() {
+
             @Override
             public void onOpen() {
                 BefLog.i(TAG, "Befrest Connected");
                 befrestProxy.reportOnOpen(PushService.this);
                 prevFailedConnectTries = 0;
-                ((BefrestInvocHandler) Proxy.getInvocationHandler(befrestProxy)).obj.prevAuthProblems = 0;
+                befrestActual.prevAuthProblems = 0;
                 mainThreadHandler.post(befrestConnected);
                 cancelFutureRetry();
             }
@@ -247,7 +256,7 @@ public class PushService extends Service {
             @Override
             public void onBefrestMessage(BefrestMessage msg) {
                 switch (msg.type) {
-                    case DATA:
+                    case NORMAL:
                     case TOPIC:
                     case GROUP:
                         BefLog.i(TAG, "Befrest Push Received:: " + msg);
@@ -381,7 +390,7 @@ public class PushService extends Service {
                 return SERVICE_STOPPED;
             if (intent.getBooleanExtra(PING, false))
                 return PING;
-            if(intent.getBooleanExtra(KEEP_PINGING, false))
+            if (intent.getBooleanExtra(KEEP_PINGING, false))
                 return KEEP_PINGING;
         }
         return "NOT_ASSIGNED";
@@ -421,7 +430,6 @@ public class PushService extends Service {
     }
 
     private void handleAthorizeProblem() {
-        BefLog.i(TAG, "Befrest On Authorize Problem!");
         if (befrestActual.prevAuthProblems == 0)
             mainThreadHandler.post(authProblem);
         else if (authProblemSinceLastStart)
