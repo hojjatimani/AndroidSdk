@@ -50,14 +50,14 @@ public final class BefrestMessage implements Parcelable {
         }
     }
 
-    private void reportCorruptedMessageAnomaly(Context c, Exception e){
+    private void reportCorruptedMessageAnomaly(Context c, Exception e) {
         ACRACrashReport crash = new ACRACrashReport(c, e);
         crash.message = "(handled) Corrupted push message";
         crash.setHandled(true);
         crash.report();
     }
 
-    private void parseMessageV2(JSONObject jsObject) throws JSONException{
+    private void parseMessageV2(JSONObject jsObject) throws JSONException {
         try {
             msgId = jsObject.getString("mid"); //if message is version 2
         } catch (Exception e) {
@@ -67,27 +67,27 @@ public final class BefrestMessage implements Parcelable {
     }
 
     private void parseMessageV1(JSONObject jsObject) throws JSONException {
-            switch (jsObject.getString("t")) {
-                case "0":
-                    type = MsgType.PONG;
-                    break;
-                case "1":
-                    type = MsgType.NORMAL;
-                    break;
-                case "2":
-                    type = MsgType.BATCH;
-                    break;
-                case "3":
-                    type = MsgType.TOPIC;
-                    break;
-                case "4":
-                    type = MsgType.GROUP;
-                    break;
-                default:
-                    throw new JSONException("unKnown Push Type!");
-            }
-            data = BefrestImpl.Util.decodeBase64(jsObject.getString("m"));
-            timeStamp = jsObject.getString("ts");
+        switch (jsObject.getString("t")) {
+            case "0":
+                type = MsgType.PONG;
+                break;
+            case "1":
+                type = MsgType.NORMAL;
+                break;
+            case "2":
+                type = MsgType.BATCH;
+                break;
+            case "3":
+                type = MsgType.TOPIC;
+                break;
+            case "4":
+                type = MsgType.GROUP;
+                break;
+            default:
+                throw new JSONException("unKnown Push Type!");
+        }
+        data = BefrestImpl.Util.decodeBase64(jsObject.getString("m"));
+        timeStamp = jsObject.getString("ts");
     }
 
     public String getData() {
@@ -98,7 +98,7 @@ public final class BefrestMessage implements Parcelable {
         return timeStamp;
     }
 
-    /* package */ String getAckMessage(){
+    /* package */ String getAckMessage() {
         return "A" + type.toString().charAt(0) + msgId;
     }
 

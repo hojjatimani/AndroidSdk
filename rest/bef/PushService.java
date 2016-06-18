@@ -1,4 +1,4 @@
-/**
+/******************************************************************************
  * Copyright 2015-2016 Befrest
  * <p/>
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,32 +12,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- * <p/>
- * If receiving befrest events through broadcast receivers does not meet
- * your needs you can implement your custom push service class that
- * extends this class and introduce it to befrest using
- * {@code BefrestFactory.getInstance(context).setCustomPushService(YourCustomPushService.class)}
- * <p/>
- * If receiving befrest events through broadcast receivers does not meet
- * your needs you can implement your custom push service class that
- * extends this class and introduce it to befrest using
- * {@code BefrestFactory.getInstance(context).setCustomPushService(YourCustomPushService.class)}
- * <p/>
- * If receiving befrest events through broadcast receivers does not meet
- * your needs you can implement your custom push service class that
- * extends this class and introduce it to befrest using
- * {@code BefrestFactory.getInstance(context).setCustomPushService(YourCustomPushService.class)}
- * <p/>
- * If receiving befrest events through broadcast receivers does not meet
- * your needs you can implement your custom push service class that
- * extends this class and introduce it to befrest using
- * {@code BefrestFactory.getInstance(context).setCustomPushService(YourCustomPushService.class)}
- * <p/>
- * If receiving befrest events through broadcast receivers does not meet
- * your needs you can implement your custom push service class that
- * extends this class and introduce it to befrest using
- * {@code BefrestFactory.getInstance(context).setCustomPushService(YourCustomPushService.class)}
- */
+ ******************************************************************************/
+
 
 /**
  * If receiving befrest events through broadcast receivers does not meet
@@ -63,6 +39,8 @@ import android.os.Parcelable;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 public class PushService extends Service {
@@ -171,6 +149,12 @@ public class PushService extends Service {
         @Override
         public void run() {
             onAuthorizeProblem();
+        }
+    };
+    Comparator<BefrestMessage> comparator = new Comparator<BefrestMessage>() {
+        @Override
+        public int compare(BefrestMessage lhs, BefrestMessage rhs) {
+            return lhs.timeStamp.compareTo(rhs.timeStamp);
         }
     };
 
@@ -482,6 +466,7 @@ public class PushService extends Service {
         final ArrayList<BefrestMessage> msgs = new ArrayList<>(receivedMessages.size());
         msgs.addAll(receivedMessages);
         receivedMessages.clear();
+        Collections.sort(msgs, comparator);
         mainThreadHandler.post(new Runnable() {
             @Override
             public void run() {
