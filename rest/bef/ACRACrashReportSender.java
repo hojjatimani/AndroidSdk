@@ -69,7 +69,7 @@ class ACRACrashReportSender {
         private static final String TAG = BefLog.TAG_PREF + "CrashSender";
         File[] reports;
 
-        public  CrashSender(File[] reports) {
+        public CrashSender(File[] reports) {
             this.reports = reports;
         }
 
@@ -87,8 +87,10 @@ class ACRACrashReportSender {
                     if (success) deleteFile(report);
                     else break;
                 } catch (IOException e) {
-                    BefLog.w(TAG, "could not load report", e);
+                    BefLog.w(TAG, "could not load report due to io problems", e);
                     break;
+                } catch (Throwable t) {
+                    BefLog.w(TAG, "could not send report with unKnwon reason!");
                 }
             }
             return null;

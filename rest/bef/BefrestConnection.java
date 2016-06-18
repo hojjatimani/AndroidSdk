@@ -242,8 +242,19 @@ class BefrestConnection extends Handler {
     }
 
     private void sendAck(String ack) {
-        mWriter.forward(new WebSocketMessage.TextMessage(ack));
-        BefLog.v(TAG, "Ack sent : " + ack);
+        try {
+            if (mWriter != null) {
+                mWriter.forward(new WebSocketMessage.TextMessage(ack));
+                BefLog.v(TAG, "Ack sent : " + ack);
+            } else {
+                BefLog.v(TAG, "Could not send ack as mWriter is null (befrest is disconnected before we send ack message)");
+            }
+        } catch (Exception e) {
+            ACRACrashReport crash = new ACRACrashReport(appContext, e);
+            crash.message = "handled - exception while sending ack";
+            crash.setHandled(false);
+            crash.report();
+        }
     }
 
     public void handleMsgFromReaderWriter(WebSocketMessage.Message msg) {
