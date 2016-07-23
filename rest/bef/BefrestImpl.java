@@ -82,7 +82,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
     private static final int[] AuthProblemBroadcastDelay = {0, 60 * 1000, 240 * 1000, 600 * 1000};
     int prevAuthProblems = 0;
 
-    private static final long WAIT_TIME_BEFORE_SENDING_CONNECT_ANOMLY_REPORT = 24 * 60 * 60 * 1000; // 24h
+    private static final long WAIT_TIME_BEFORE_SENDING_CONNECT_ANOMLY_REPORT = 72 * 60 * 60 * 1000; // 72h
 
     private int reportedContinuousCloses;
     private String continuousClosesTypes;
@@ -100,7 +100,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
      */
     public Befrest init(long uId, String auth, String chId) {
         if (chId == null || !(chId.length() > 0))
-            throw new BefrestIllegalArgumentException("invalid chId!");
+            throw new BefrestException("invalid chId!");
         if (uId != this.uId || (auth != null && !auth.equals(this.auth)) || !chId.equals(this.chId)) {
             this.uId = uId;
             this.auth = auth;
@@ -116,9 +116,9 @@ final class BefrestImpl implements Befrest, BefrestInternal {
      */
     public Befrest setCustomPushService(Class<? extends PushService> customPushService) {
         if (customPushService == null)
-            throw new BefrestIllegalArgumentException("invalid custom push service!");
+            throw new BefrestException("invalid custom push service!");
         else if (isBefrestStarted && !customPushService.equals(pushService)) {
-            throw new BefrestIllegalArgumentException("can not set custom push service after starting befrest!");
+            throw new BefrestException("can not set custom push service after starting befrest!");
         } else {
             this.pushService = customPushService;
             saveString(context, PREF_CUSTOM_PUSH_SERVICE_NAME, customPushService.getName());
@@ -147,7 +147,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
      */
     public Befrest setChId(String chId) {
         if (chId == null || !(chId.length() > 0))
-            throw new BefrestIllegalArgumentException("invalid chId!");
+            throw new BefrestException("invalid chId!");
         if (!chId.equals(this.chId)) {
             this.chId = chId;
             clearTempData();
@@ -163,7 +163,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
      */
     public Befrest setAuth(String auth) {
         if (auth == null || !(auth.length() > 0))
-            throw new BefrestIllegalArgumentException("invalid auth!");
+            throw new BefrestException("invalid auth!");
         if (!auth.equals(this.auth)) {
             this.auth = auth;
             clearTempData();
@@ -182,7 +182,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
     public void start() {
         BefLog.i(TAG, "starting befrest");
         if (uId < 0 || chId == null || chId.length() < 1)
-            throw new BefrestIllegalArgumentException("uId and chId are not properly defined!");
+            throw new BefrestException("uId and chId are not properly defined!");
         isBefrestStarted = true;
         if (connectionDataChangedSinceLastStart)
             context.stopService(new Intent(context, pushService));
@@ -205,7 +205,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
 
     public Befrest addTopic(String topicName) {
         if (topicName == null || topicName.length() < 1 || !topicName.matches("[A-Za-z0-9]+"))
-            throw new BefrestIllegalArgumentException("topic name should be an alpha-numeric string!");
+            throw new BefrestException("topic name should be an alpha-numeric string!");
         for (String s : topics.split("-"))
             if (s.equals(topicName))
                 return this;
@@ -222,7 +222,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
      *
      * @param topicName Name of topic to be added
      */
-    public Befrest removeTopic(String topicName) {
+    public boolean removeTopic(String topicName) {
         String[] splitedTopics = topics.split("-");
         boolean found = false;
         String resTopics = "";
@@ -232,11 +232,11 @@ final class BefrestImpl implements Befrest, BefrestInternal {
             else resTopics += splitedTopic + "-";
         }
         if (!found)
-            throw new BefrestIllegalArgumentException("Topic Not Exist!");
+            return false;
         if (resTopics.length() > 0) resTopics = resTopics.substring(0, resTopics.length() - 1);
         updateTpics(resTopics);
         BefLog.i(TAG, "Topics: " + topics);
-        return this;
+        return true;
     }
 
     /**
@@ -381,7 +381,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         saveString(context, PREF_CONTINUOUS_CLOSES_TYPES, continuousClosesTypes);
         saveInt(context, PREF_CONTINUOUS_CLOSES, reportedContinuousCloses);
         if (System.currentTimeMillis() - connectAnomalyDataRecordingStartTime > WAIT_TIME_BEFORE_SENDING_CONNECT_ANOMLY_REPORT)
-            if (reportedContinuousCloses > 25) {
+            if (reportedContinuousCloses > 75) {
                 ACRACrashReport crash = new ACRACrashReport(context, "Connect Anomaly Report");
                 crash.addCustomData("ContiniousCloseTypes", continuousClosesTypes);
                 crash.addCustomData("LastSuccessfulConnectTime", "" + getPrefs(context).getLong(PREF_LAST_SUCCESSFUL_CONNECT_TIME, 0));
@@ -407,9 +407,20 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         saveInt(context, PREF_CONTINUOUS_CLOSES, reportedContinuousCloses);
     }
 
-    class BefrestIllegalArgumentException extends IllegalArgumentException {
-        public BefrestIllegalArgumentException(String detailMessage) {
+    class BefrestException extends RuntimeException{
+        public BefrestException() {
+        }
+
+        public BefrestException(String detailMessage) {
             super(detailMessage);
+        }
+
+        public BefrestException(String detailMessage, Throwable throwable) {
+            super(detailMessage, throwable);
+        }
+
+        public BefrestException(Throwable throwable) {
+            super(throwable);
         }
     }
 }

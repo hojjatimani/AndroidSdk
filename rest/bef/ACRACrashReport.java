@@ -37,6 +37,7 @@ import static rest.bef.ACRAConstants.*;
 import static rest.bef.ACRAReportField.*;
 import static rest.bef.BefrestPrefrences.PREF_CH_ID;
 import static rest.bef.BefrestPrefrences.PREF_U_ID;
+
 final class ACRACrashReport {
     private static final String TAG = "ACRACrashReport";
 
@@ -105,9 +106,10 @@ final class ACRACrashReport {
         BefLog.d(TAG, "Generating Crash Report...");
         try {
             addCustomData("ANDROID_SKD_VERSION_NAME", BefLog.SDK_VERSION_NAME);
-            addCustomData("SDK_VERSION" , "" + BefrestInternal.Util.SDK_VERSION);
+            addCustomData("SDK_VERSION", "" + BefrestInternal.Util.SDK_VERSION);
             addCustomData("ANDROID_ID", Settings.Secure.getString(appContext.getContentResolver(), Settings.Secure.ANDROID_ID));
-        }catch (Throwable t){}
+        } catch (Throwable t) {
+        }
         final ACRACrashReportData crashReportData = createCrashData();
         final File reportFile = getReportFileName(crashReportData);
         saveCrashReportFile(reportFile, crashReportData);

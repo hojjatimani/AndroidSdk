@@ -7,9 +7,6 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 
-/**
- * Created by hojjatimani on 3/9/2016 AD.
- */
 class ACRACrashReportSender {
     private static final String TAG = BefLog.TAG_PREF + "ACRACrashReportSender";
     Context context;
@@ -77,6 +74,7 @@ class ACRACrashReportSender {
         protected String doInBackground(String... params) {
             Thread.currentThread().setName(TAG);
             for (File report : reports) {
+                BefLog.d(TAG, "trying to send crash data.");
                 if (!BefrestInternal.Util.isWifiConnected(context))
                     break;
 

@@ -151,6 +151,7 @@ public class PushService extends Service {
             onAuthorizeProblem();
         }
     };
+
     Comparator<BefrestMessage> comparator = new Comparator<BefrestMessage>() {
         @Override
         public int compare(BefrestMessage lhs, BefrestMessage rhs) {
@@ -175,7 +176,6 @@ public class PushService extends Service {
 
     @Override
     public final void onLowMemory() {
-        BefLog.v(TAG, "onLowMemory!!!!!!!!!!!!!!!******************************************");
         super.onLowMemory();
     }
 
@@ -186,7 +186,6 @@ public class PushService extends Service {
 
     @Override
     public final void onTrimMemory(int level) {
-        BefLog.v(TAG, "onTrimMemory!!!!!!!!!!!!!!!******************************************");
         super.onTrimMemory(level);
     }
 
@@ -221,7 +220,6 @@ public class PushService extends Service {
             }
         };
         super.onCreate();
-        System.gc();
     }
 
     private void createWebsocketConnectionHanlder() {
@@ -300,13 +298,15 @@ public class PushService extends Service {
         mConnection.forward(new BefrestEvent(BefrestEvent.Type.DISCONNECT));
         mConnection.forward(new BefrestEvent(BefrestEvent.Type.STOP));
         try {
-            befrestHandlerThread.join();
+            befrestHandlerThread.join(6000);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
         unRegisterBroadCastReceiver();
         if (befrestActual.isBefrestStarted)
             befrestProxy.setStartServiceAlarm();
+        mConnection = null;
+        befrestHandlerThread = null;
         super.onDestroy();
         BefLog.v(TAG, "PushService==================onDestroy()_END===============");
     }
