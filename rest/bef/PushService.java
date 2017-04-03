@@ -298,7 +298,7 @@ public class PushService extends Service {
         mConnection.forward(new BefrestEvent(BefrestEvent.Type.DISCONNECT));
         mConnection.forward(new BefrestEvent(BefrestEvent.Type.STOP));
         try {
-            befrestHandlerThread.join(6000);
+            befrestHandlerThread.join(1000);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }

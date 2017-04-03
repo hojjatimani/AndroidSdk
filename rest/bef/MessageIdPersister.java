@@ -15,6 +15,7 @@
  ******************************************************************************/
 package rest.bef;
 
+import android.app.AlertDialog;
 import android.content.Context;
 
 import static rest.bef.BefrestPrefrences.*;

@@ -556,11 +556,11 @@ class BefrestConnection extends Handler {
                 BefLog.v(TAG, "mTransportChannel was NULL");
             }
             if (mWriterThread != null) {
-                mWriterThread.join(5000);
+                mWriterThread.join(1000);
                 BefLog.v(TAG, "mWriterThread joined");
             }
             if (mReader != null) {
-                mReader.join(5000);
+                mReader.join(1000);
                 BefLog.v(TAG, "mReader joined");
             }
         } catch (InterruptedException e) {

@@ -364,14 +364,19 @@ final class BefrestImpl implements Befrest, BefrestInternal {
     }
 
     public void sendBefrestBroadcast(Context context, int type, Bundle extras) {
-        Intent intent = new Intent(BefrestPushReceiver.ACTION_BEFREST_PUSH);
-        intent.putExtra(BefrestPushReceiver.BROADCAST_TYPE, type);
-        if (extras != null) intent.putExtras(extras);
-        String permission = BefrestImpl.Util.getBroadcastSendingPermission(context);
-        long now = System.currentTimeMillis();
-        intent.putExtra(BefrestPushReceiver.KEY_TIME_SENT, "" + now);
-        context.getApplicationContext().sendBroadcast(intent, permission);
-        BefLog.v(TAG, "broadcast sent::    type: " + type + "      permission:" + permission);
+        try {
+            Intent intent = new Intent(BefrestPushReceiver.ACTION_BEFREST_PUSH);
+            intent.putExtra(BefrestPushReceiver.BROADCAST_TYPE, type);
+            if (extras != null) intent.putExtras(extras);
+            String permission = BefrestImpl.Util.getBroadcastSendingPermission(context);
+            long now = System.currentTimeMillis();
+            intent.putExtra(BefrestPushReceiver.KEY_TIME_SENT, "" + now);
+            context.getApplicationContext().sendBroadcast(intent, permission);
+            BefLog.v(TAG, "broadcast sent::    type: " + type + "      permission:" + permission);
+        } catch (Exception ignored) {
+            //catch System failure
+            BefLog.v(TAG, "could not send broadcast type: " + type);
+        }
     }
 
     public void reportOnClose(Context context, int code) {
@@ -407,7 +412,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         saveInt(context, PREF_CONTINUOUS_CLOSES, reportedContinuousCloses);
     }
 
-    class BefrestException extends RuntimeException{
+    class BefrestException extends RuntimeException {
         public BefrestException() {
         }
 
