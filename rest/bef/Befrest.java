@@ -53,7 +53,9 @@ public interface Befrest {
     void start();
     void stop();
     Befrest addTopic(String topicName);
+    Befrest addTopics(String... topics);
     boolean removeTopic(String topicName);
+    Befrest removeTopics(String... topics);
     String[] getCurrentTopics();
     boolean refresh();
     void registerPushReceiver(BefrestPushReceiver receiver);

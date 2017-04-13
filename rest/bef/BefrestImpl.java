@@ -25,6 +25,7 @@ import android.os.Bundle;
 import android.os.SystemClock;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -217,10 +218,33 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         return this;
     }
 
+    public Befrest addTopics(String... topicsToAdd) {
+        if (topicsToAdd == null || topicsToAdd.length < 1)
+            return this;
+        final List<String> currTopics = Arrays.asList(topics.split("-"));
+        for (String topic : topicsToAdd) {
+            if (topic == null || topic.length() < 1 || !topic.matches("[A-Za-z0-9]+")) {
+                BefLog.w(TAG, "invalid topic name : '" + topic + "' (topic name should be an alpha-numeric string!)");
+                continue;
+            }
+            if (currTopics.contains(topic)) {
+                BefLog.w(TAG, "topic already exists : '" + topic + "'");
+                continue;
+            }
+            if (topics.length() > 0)
+                topics += "-";
+            topics += topic;
+            currTopics.add(topic);
+        }
+        updateTpics(this.topics);
+        BefLog.i(TAG, "Topics: " + topics);
+        return this;
+    }
+
     /**
      * remove a topic from current topics that user has.
      *
-     * @param topicName Name of topic to be added
+     * @param topicName Name of topic to be removed
      */
     public boolean removeTopic(String topicName) {
         String[] splitedTopics = topics.split("-");
@@ -237,6 +261,21 @@ final class BefrestImpl implements Befrest, BefrestInternal {
         updateTpics(resTopics);
         BefLog.i(TAG, "Topics: " + topics);
         return true;
+    }
+
+    public Befrest removeTopics(String... topicsToRemove) {
+        final List<String> toRemove = Arrays.asList(topicsToRemove);
+        final List<String> currTopics = Arrays.asList(topics.split("-"));
+        String resTopics = "";
+        for (String topic : currTopics) {
+            if (!toRemove.contains(topic))
+                resTopics += topic + "-";
+        }
+        if (resTopics.length() > 0)
+            resTopics = resTopics.substring(0, resTopics.length() - 1);
+        updateTpics(resTopics);
+        BefLog.i(TAG, "Topics: " + topics);
+        return this;
     }
 
     /**
