@@ -221,7 +221,7 @@ final class BefrestImpl implements Befrest, BefrestInternal {
     public Befrest addTopics(String... topicsToAdd) {
         if (topicsToAdd == null || topicsToAdd.length < 1)
             return this;
-        final List<String> currTopics = Arrays.asList(topics.split("-"));
+        List<String> currTopics = new ArrayList<>(Arrays.asList(topics.split("-")));
         for (String topic : topicsToAdd) {
             if (topic == null || topic.length() < 1 || !topic.matches("[A-Za-z0-9]+")) {
                 BefLog.w(TAG, "invalid topic name : '" + topic + "' (topic name should be an alpha-numeric string!)");
