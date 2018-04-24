@@ -48,31 +48,31 @@ class BefrestPrefrences {
     static void saveInt(Context context, String key, int value) {
         Editor editor = getPrefs(context).edit();
         editor.putInt(key, value);
-        commitChanges(context, editor);
+        editor.apply();
     }
 
     static void saveString(Context context, String key, String value) {
         Editor editor = getPrefs(context).edit();
         editor.putString(key, value);
-        commitChanges(context, editor);
+        editor.apply();
     }
 
     static void saveFloat(Context context, String key, float value) {
         Editor editor = getPrefs(context).edit();
         editor.putFloat(key, value);
-        commitChanges(context, editor);
+        editor.apply();
     }
 
     static void saveBoolean(Context context, String key, boolean value) {
         Editor editor = getPrefs(context).edit();
         editor.putBoolean(key, value);
-        commitChanges(context, editor);
+        editor.apply();
     }
 
     static void saveLong(Context context, String key, long value) {
         Editor editor = getPrefs(context).edit();
         editor.putLong(key, value);
-        commitChanges(context, editor);
+        editor.apply();
     }
 
     static void saveToPrefs(Context context, long uId, String AUTH, String chId) {
@@ -80,18 +80,6 @@ class BefrestPrefrences {
         prefEditor.putLong(PREF_U_ID, uId);
         prefEditor.putString(PREF_AUTH, AUTH);
         prefEditor.putString(PREF_CH_ID, chId);
-        commitChanges(context, prefEditor);
-    }
-
-    private static void commitChanges(Context context, SharedPreferences.Editor editor) {
-        try {
-            editor.commit();
-        } catch (Throwable t) {
-            ACRACrashReport crash = new ACRACrashReport(context, t);
-            crash.message = "(handled) unable to commit changes to sharedPrefrences (Nazdika#930)";
-            crash.setHandled(true);
-            crash.report();
-            editor.commit();
-        }
+        prefEditor.apply();
     }
 }
